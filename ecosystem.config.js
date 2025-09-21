@@ -5,7 +5,6 @@ module.exports = {
     args: 'serve --host=0.0.0.0 --port=8000',
     interpreter: 'php',
     cwd: '/var/www/marwah-travels',
-    user: 'www-data',
     instances: 1,
     autorestart: true,
     watch: false,
