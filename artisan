@@ -9,6 +9,16 @@ require __DIR__.'/vendor/autoload.php';
 // Bootstrap Laravel and handle the command...
 $app = require_once __DIR__.'/bootstrap/app.php';
 
+// Check if $app is actually an application instance
+if (!($app instanceof Illuminate\Contracts\Foundation\Application)) {
+    echo "Error: bootstrap/app.php did not return a valid Laravel application instance.\n";
+    echo "Type returned: " . gettype($app) . "\n";
+    if (is_object($app)) {
+        echo "Class: " . get_class($app) . "\n";
+    }
+    exit(1);
+}
+
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 
 $status = $kernel->handle(
