@@ -1,6 +1,6 @@
 module.exports = {
   apps: [{
-    name: 'marwah-travels',
+    name: 'marwah-seo-backend',
     script: 'artisan',
     args: 'serve --host=0.0.0.0 --port=8000',
     interpreter: 'php',
