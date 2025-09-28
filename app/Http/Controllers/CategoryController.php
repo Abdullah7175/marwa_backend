@@ -8,6 +8,23 @@ use App\Models\Package;
 
 class CategoryController extends Controller
 {
+    public function index()
+    {
+        $categories = Category::where('status', '!=', 'delete')->get();
+        return response()->json($categories, 200);
+    }
+
+    public function show($id)
+    {
+        $category = Category::find($id);
+        
+        if (!$category) {
+            return response()->json(['error' => 'Category not found'], 404);
+        }
+        
+        return response()->json($category, 200);
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -16,22 +33,46 @@ class CategoryController extends Controller
 
         $category = Category::create([
             'name' => $request->name,
+            'status' => 'active'
         ]);
 
         return response()->json(['message' => 'Category created successfully', 'category' => $category], 201);
     }
+
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name,' . $id,
+            'status' => 'nullable|string|in:active,inactive'
+        ]);
+
+        $category = Category::find($id);
+
+        if (!$category) {
+            return response()->json(['error' => 'Category not found'], 404);
+        }
+
+        $category->update([
+            'name' => $request->name,
+            'status' => $request->status ?? $category->status
+        ]);
+
+        return response()->json(['message' => 'Category updated successfully', 'category' => $category], 200);
+    }
+
     public function destroy($id)
     {
-        
-        $user = Category::find($id);
+        $category = Category::find($id);
 
-        if (!$user) {
-            return response()->json(['error' => 'Category Id is Invalid'], 404);
+        if (!$category) {
+            return response()->json(['error' => 'Category not found'], 404);
         }
-        Package::where('category_id',$id)->delete();
 
-        $user->update(['status'=>'delete']);
-        $user->save();
+        // Soft delete by updating status
+        $category->update(['status' => 'delete']);
+        
+        // Also delete related packages
+        Package::where('category_id', $id)->delete();
 
         return response()->json(['message' => 'Category deleted successfully'], 200);
     }

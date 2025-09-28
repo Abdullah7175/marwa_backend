@@ -24,8 +24,23 @@ class PackageController extends Controller
         return null;
     }
 
+    public function index()
+    {
+        $packages = Package::with('category')->get();
+        return response()->json($packages, 200);
+    }
 
-   
+    public function show($id)
+    {
+        $package = Package::with('category')->find($id);
+        
+        if (!$package) {
+            return response()->json(['error' => 'Package not found'], 404);
+        }
+        
+        return response()->json($package, 200);
+    }
+
     public function store(Request $request)
     {
         try {

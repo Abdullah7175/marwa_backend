@@ -24,8 +24,23 @@ class HotelController extends Controller
         return null;
     }
 
+    public function index()
+    {
+        $hotels = Hotel::all();
+        return response()->json($hotels, 200);
+    }
 
-   
+    public function show($id)
+    {
+        $hotel = Hotel::find($id);
+        
+        if (!$hotel) {
+            return response()->json(['error' => 'Hotel not found'], 404);
+        }
+        
+        return response()->json($hotel, 200);
+    }
+
     public function store(Request $request)
     {
         try {

@@ -13,10 +13,13 @@ use App\Http\Controllers\PanelController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SeoController;
 
+// Blogs CRUD
 Route::prefix('blogs')->group(function () {
     Route::post('/create', [BlogController::class, 'store']);
-    Route::post('/{id}', [BlogController::class, 'update']);
-    Route::get('/delete/{id}', [BlogController::class, 'destroy']);
+    Route::get('/', [BlogController::class, 'index']);
+    Route::get('/{id}', [BlogController::class, 'show']);
+    Route::put('/{id}', [BlogController::class, 'update']);
+    Route::delete('/{id}', [BlogController::class, 'destroy']);
 });
 
 
@@ -58,17 +61,32 @@ Route::prefix('panel')->group(function () {
 
 
 
-Route::post('/categories/create',  [CategoryController::class, 'store']);
-Route::get('/categories/delete/{id}',  [CategoryController::class, 'destroy']);
+// Categories CRUD
+Route::prefix('categories')->group(function () {
+    Route::post('/create', [CategoryController::class, 'store']);
+    Route::get('/', [CategoryController::class, 'index']);
+    Route::get('/{id}', [CategoryController::class, 'show']);
+    Route::put('/{id}', [CategoryController::class, 'update']);
+    Route::delete('/{id}', [CategoryController::class, 'destroy']);
+});
 
-Route::post('/packages/create',  [PackageController::class, 'store']);
+// Packages CRUD
+Route::prefix('packages')->group(function () {
+    Route::post('/create', [PackageController::class, 'store']);
+    Route::get('/', [PackageController::class, 'index']);
+    Route::get('/{id}', [PackageController::class, 'show']);
+    Route::put('/{id}', [PackageController::class, 'update']);
+    Route::delete('/{id}', [PackageController::class, 'destroy']);
+});
 
-Route::post('/hotels/create',  [HotelController::class, 'store']);
-
-Route::post('/packages/update',  [PackageController::class, 'update']);
-Route::post('/hotels/update',  [HotelController::class, 'update']);
-
-Route::get('/packages/delete/{id}',  [PackageController::class, 'destroy']);
+// Hotels CRUD
+Route::prefix('hotels')->group(function () {
+    Route::post('/create', [HotelController::class, 'store']);
+    Route::get('/', [HotelController::class, 'index']);
+    Route::get('/{id}', [HotelController::class, 'show']);
+    Route::put('/{id}', [HotelController::class, 'update']);
+    Route::delete('/{id}', [HotelController::class, 'destroy']);
+});
 
 
 Route::get('/web/packs',[WebController::class,'getPackages']);
@@ -76,9 +94,17 @@ Route::get('/web/packs',[WebController::class,'getPackages']);
 
 Route::get('/web/blogs', [WebController::class, 'getBlogs']);
 
+// Inquiries CRUD
+Route::prefix('inquiries')->group(function () {
+    Route::post('/create', [WebController::class, 'createIquiry']);
+    Route::get('/', [WebController::class, 'getInquiries']);
+    Route::get('/{id}', [WebController::class, 'showInquiry']);
+    Route::put('/{id}', [WebController::class, 'updateInquiry']);
+    Route::delete('/{id}', [WebController::class, 'deleteInquiry']);
+});
+
+// Public inquiry submission
 Route::post('/web/inquiry/submit', [WebController::class, 'createIquiry']);
-Route::get('/inquiries', [WebController::class, 'getInquiries']);
-Route::get('/inquiry/delete/{id}',[WebController::class,'deleteInquiry']);
 
 
 

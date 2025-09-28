@@ -72,17 +72,61 @@ class WebController extends Controller
    }
 
 
-   public function deleteInquiry($id){
-    $i = Inquiry::find($id);
-    if($i){
-        $i->delete();
-    }
+   public function showInquiry($id)
+   {
+       $inquiry = Inquiry::find($id);
+       
+       if (!$inquiry) {
+           return response()->json(['error' => 'Inquiry not found'], 404);
+       }
+       
+       return response()->json($inquiry, 200);
+   }
 
-    return response()->json(Inquiry::all(),200);
+   public function updateInquiry(Request $request, $id)
+   {
+       $inquiry = Inquiry::find($id);
+       
+       if (!$inquiry) {
+           return response()->json(['error' => 'Inquiry not found'], 404);
+       }
+       
+       // Validation rules
+       $rules = [
+           'name' => 'required|string',
+           'email' => 'required|email',
+           'phone' => 'required|string',
+           'message' => 'required|string',
+       ];
+
+       // Validate the request data
+       $validator = Validator::make($request->all(), $rules);
+
+       // If validation fails, return error response
+       if ($validator->fails()) {
+           return response()->json(['errors' => $validator->errors()], 422);
+       }
+
+       // Update inquiry
+       $inquiry->update($validator->validated());
+
+       // Return success response
+       return response()->json(['message' => 'Inquiry updated successfully', 'inquiry' => $inquiry], 200);
+   }
+
+   public function deleteInquiry($id){
+       $inquiry = Inquiry::find($id);
+       
+       if (!$inquiry) {
+           return response()->json(['error' => 'Inquiry not found'], 404);
+       }
+       
+       $inquiry->delete();
+       return response()->json(['message' => 'Inquiry deleted successfully'], 200);
    }
 
    public function getInquiries(){
-    return response()->json(Inquiry::all(),200);
+       return response()->json(Inquiry::all(), 200);
    }
 
 

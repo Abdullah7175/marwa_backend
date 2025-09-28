@@ -68,59 +68,93 @@ class BlogController extends Controller
 
         return response()->json($blog, 201);
     }
+    public function index()
+    {
+        $blogs = Blog::all();
+        $res = [];
+        foreach($blogs as $b){
+           $data = $b->toArray();
+           $elements = BlogElement::where('blog_id',$b['id'])->get();
+           $res[] = array_merge($data,['elements'=>$elements]);
+        }
+        return response()->json($res, 200);
+    }
+
+    public function show($id)
+    {
+        $blog = Blog::find($id);
+        
+        if (!$blog) {
+            return response()->json(['error' => 'Blog not found'], 404);
+        }
+        
+        $data = $blog->toArray();
+        $elements = BlogElement::where('blog_id', $blog->id)->get();
+        $data['elements'] = $elements;
+        
+        return response()->json($data, 200);
+    }
+
     public function update(Request $request, $id)
     {
         try {
             // Validation
             $validatedData = $request->validate([
-            
                 'title' => 'required|string|max:255',
-                'image' => 'file',
+                'image' => 'nullable|file',
                 'elements' => 'required|array'
             ]);
 
-
-
             $blog = Blog::find($id);
             if(!$blog){
-                return response()->json(['error'=>'invalid id'],200);
+                return response()->json(['error' => 'Blog not found'], 404);
             }
 
-         
-            
+            // Handle image update
             $imagePath = $blog->image;
-            if($request->file('image')!=null){
-                $imagePath = $this->saveImage($request->file('image'),'blogs_images');
+            if($request->hasFile('image')){
+                $imagePath = $this->saveImage($request->file('image'), 'blogs_images');
             }
-            // Create blog post
-            $blog->update(['title'=>$validatedData['title'],'image'=>$imagePath]);
-            $blog_id = $blog['id']; 
-            $res = BlogElement::where('blog_id',$blog_id)->delete();
+            
+            // Update blog post
+            $blog->update([
+                'title' => $validatedData['title'],
+                'image' => $imagePath
+            ]);
+            
+            // Delete existing elements
+            BlogElement::where('blog_id', $id)->delete();
 
+            // Add new elements
             $elements = $validatedData['elements'];
             $elementsArray = [];
             foreach ($elements as $jsonString) {
                 $elementsArray[] = json_decode($jsonString, true);
             }
-            //types ={heading,subheading,points,image}
+            
+            // Create new elements
             foreach ($elementsArray as $e) {
-                $element = BlogElement::find($e['id']);
-                if($element){
-                    $element->update(['element_type'=>$e['element_type'],'value'=>$e['value'],'blog_id'=>$blog_id]);
-                    $element->save();
-                }else{
-                    BlogElement::create(['element_type'=>$e['element_type'],'value'=>$e['value'],'blog_id'=>$blog_id]);
+                if ($e['element_type'] === 'image' && isset($e['value']) && $request->hasFile($e['value'])) {
+                    $imagePath = $this->saveImage($request->file($e['value']), 'blogs_images');
+                    BlogElement::create([
+                        'element_type' => 'image',
+                        'value' => $imagePath,
+                        'blog_id' => $id
+                    ]);
+                } else {
+                    BlogElement::create([
+                        'element_type' => $e['element_type'],
+                        'value' => $e['value'],
+                        'blog_id' => $id
+                    ]);
                 }
-                
             }
+            
+            return response()->json(['message' => 'Blog updated successfully', 'blog' => $blog], 200);
+            
         } catch (ValidationException $e) {
-            // Return validation error response
             return response()->json(['error' => $e->errors()], 422);
         }
-
-        
-
-        return response()->json($blog, 201);
     }
 
     public function destroy($id)
