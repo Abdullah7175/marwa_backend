@@ -96,3 +96,46 @@ Route::prefix('seo')->group(function () {
     Route::get('/all', [SeoController::class, 'getAllSeoSettings']);
     Route::delete('/page/delete', [SeoController::class, 'deletePageSeo']);
 });
+
+// File serving endpoint for images
+Route::get('/files', function (Request $request) {
+    $path = $request->query('path');
+    
+    if (!$path) {
+        return response()->json(['error' => 'Path parameter is required'], 400);
+    }
+    
+    // Remove leading slash if present
+    $path = ltrim($path, '/');
+    
+    // Security check - only allow access to storage directory
+    if (!str_starts_with($path, 'storage/')) {
+        return response()->json(['error' => 'Access denied'], 403);
+    }
+    
+    // Try multiple possible locations for the file
+    $possiblePaths = [
+        storage_path('app/public/' . substr($path, 8)), // Remove 'storage/' prefix
+        storage_path(substr($path, 8)), // Direct storage path
+        public_path($path), // Public directory
+    ];
+    
+    $fullPath = null;
+    foreach ($possiblePaths as $possiblePath) {
+        if (file_exists($possiblePath)) {
+            $fullPath = $possiblePath;
+            break;
+        }
+    }
+    
+    if (!$fullPath) {
+        return response()->json(['error' => 'File not found'], 404);
+    }
+    
+    $mimeType = mime_content_type($fullPath);
+    
+    return response()->file($fullPath, [
+        'Content-Type' => $mimeType,
+        'Cache-Control' => 'public, max-age=31536000', // Cache for 1 year
+    ]);
+});
