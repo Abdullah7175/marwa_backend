@@ -101,6 +101,8 @@ Route::prefix('inquiries')->group(function () {
     Route::get('/{id}', [WebController::class, 'showInquiry']);
     Route::put('/{id}', [WebController::class, 'updateInquiry']);
     Route::delete('/{id}', [WebController::class, 'deleteInquiry']);
+    // Secure manual forward of an inquiry to external webhook
+    Route::post('/{id}/forward-webhook', [WebController::class, 'forwardInquiryWebhook']);
 });
 
 // Public inquiry submission
