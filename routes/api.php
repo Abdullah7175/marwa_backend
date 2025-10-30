@@ -141,23 +141,67 @@ Route::get('/files', function (Request $request) {
     // Remove leading slash if present
     $path = ltrim($path, '/');
     
-    // Security check - only allow access to storage directory
-    if (!str_starts_with($path, 'storage/')) {
-        return response()->json(['error' => 'Access denied'], 403);
+    // Security check - prevent directory traversal attacks
+    if (strpos($path, '..') !== false || strpos($path, './') !== false) {
+        return response()->json(['error' => 'Access denied - invalid path'], 403);
+    }
+    
+    // Allow paths starting with storage/ or images/
+    $allowedPrefixes = ['storage/', 'images/'];
+    $isAllowed = false;
+    foreach ($allowedPrefixes as $prefix) {
+        if (str_starts_with($path, $prefix)) {
+            $isAllowed = true;
+            break;
+        }
+    }
+    
+    if (!$isAllowed) {
+        return response()->json(['error' => 'Access denied - path must start with storage/ or images/'], 403);
     }
     
     // Try multiple possible locations for the file
-    $possiblePaths = [
-        storage_path('app/public/' . substr($path, 8)), // Remove 'storage/' prefix
-        storage_path(substr($path, 8)), // Direct storage path
-        public_path($path), // Public directory
-    ];
+    $possiblePaths = [];
+    
+    if (str_starts_with($path, 'storage/')) {
+        // Handle storage paths
+        $relativePath = substr($path, 8); // Remove 'storage/' prefix
+        $possiblePaths = [
+            storage_path('app/public/' . $relativePath),
+            storage_path($relativePath),
+            public_path('storage/' . $relativePath),
+            public_path($path), // Public directory with full path
+        ];
+    } elseif (str_starts_with($path, 'images/')) {
+        // Handle images paths (from public directory or Next.js)
+        $relativePath = substr($path, 7); // Remove 'images/' prefix
+        $possiblePaths = [
+            public_path('images/' . $relativePath), // Public/images/...
+            public_path($path), // Public/images/... (full path)
+            storage_path('app/public/' . $path), // In case images are in storage
+            base_path('public/' . $path), // Alternative public path
+            storage_path('app/public/images/' . $relativePath), // Storage with images prefix
+        ];
+    }
     
     $fullPath = null;
     foreach ($possiblePaths as $possiblePath) {
-        if (file_exists($possiblePath)) {
-            $fullPath = $possiblePath;
-            break;
+        // Additional security: ensure the resolved path is within allowed directories
+        $realPath = realpath($possiblePath);
+        if ($realPath && file_exists($realPath)) {
+            // Verify the file is in an allowed directory
+            $allowedDirs = [
+                realpath(storage_path('app/public')),
+                realpath(public_path()),
+                realpath(base_path('public')),
+            ];
+            
+            foreach ($allowedDirs as $allowedDir) {
+                if ($allowedDir && str_starts_with($realPath, $allowedDir)) {
+                    $fullPath = $realPath;
+                    break 2; // Break out of both loops
+                }
+            }
         }
     }
     
