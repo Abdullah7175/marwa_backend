@@ -24,49 +24,74 @@ class BlogController extends Controller
     public function store(Request $request)
     {
         try {
-            // Validation
             $validatedData = $request->validate([
                 'title' => 'required|string|max:255',
-                'image' => 'file|required',
-                'elements' => 'required|array'
+                'image' => 'required|file',
+                'elements' => 'required|array',
             ]);
 
+            $imagePath = $this->saveImage($request->file('image'), 'blogs_images');
 
-            $imagePath = $this->saveImage($request->file('image'),'blogs_images');
-            // Create blog post
-            $blog = Blog::create(['title'=>$validatedData['title'],'image'=>$imagePath]);
+            $blog = Blog::create([
+                'title' => $validatedData['title'],
+                'image' => $imagePath,
+            ]);
             $blog_id = $blog['id'];
 
-
-           // return $blog_id;
-
-        
-
             $elements = $validatedData['elements'];
-            $elementsArray = [];
-            foreach ($elements as $jsonString) {
-                $elementsArray[] = json_decode($jsonString, true);
-            }
-            //types ={heading,subheading,points,image}
-            foreach ($elementsArray as $e) {
-                if ($e['element_type'] === 'image') {
-                    $imagePath = $request->file($e['value']);
-                    $imagePath = $this->saveImage($imagePath,'blogs_images');
-                    
-                    BlogElement::create(['element_type'=>'image','value'=>$imagePath,'blog_id'=>$blog_id]);
-                }else{
-                    BlogElement::create(['element_type'=>$e['element_type'],'value'=>$e['value'],'blog_id'=>$blog_id]);
+            $normalizedElements = [];
 
+            foreach ($elements as $index => $item) {
+                if (is_string($item)) {
+                    $decoded = json_decode($item, true);
+                    if ($decoded === null || !is_array($decoded)) {
+                        throw ValidationException::withMessages([
+                            "elements.$index" => ['Invalid JSON element.'],
+                        ]);
+                    }
+                    $normalizedElements[] = $decoded;
+                } elseif (is_array($item)) {
+                    $normalizedElements[] = $item;
+                } else {
+                    throw ValidationException::withMessages([
+                        "elements.$index" => ['Element must be JSON string or object.'],
+                    ]);
                 }
             }
+
+            foreach ($normalizedElements as $index => $e) {
+                if (!isset($e['element_type']) || !isset($e['value'])) {
+                    throw ValidationException::withMessages([
+                        "elements.$index" => ['Each element must include element_type and value.'],
+                    ]);
+                }
+
+                if ($e['element_type'] === 'image') {
+                    $fieldName = $e['value'];
+                    if (!$request->hasFile($fieldName)) {
+                        throw ValidationException::withMessages([
+                            "elements.$index" => ["Image field '$fieldName' not found in request."],
+                        ]);
+                    }
+                    $elemImagePath = $this->saveImage($request->file($fieldName), 'blogs_images');
+                    BlogElement::create([
+                        'element_type' => 'image',
+                        'value' => $elemImagePath,
+                        'blog_id' => $blog_id,
+                    ]);
+                } else {
+                    BlogElement::create([
+                        'element_type' => $e['element_type'],
+                        'value' => $e['value'],
+                        'blog_id' => $blog_id,
+                    ]);
+                }
+            }
+
+            return response()->json($blog, 201);
         } catch (ValidationException $e) {
-            // Return validation error response
             return response()->json(['error' => $e->errors()], 422);
         }
-
-        
-
-        return response()->json($blog, 201);
     }
     public function index()
     {
