@@ -39,6 +39,11 @@ Route::prefix('custom-packages')->group(function () {
 });
 
 Route::prefix('reviews')->group(function () {
+    // Test route to verify API is accessible
+    Route::get('/test', function() {
+        return response()->json(['status' => 'API route accessible', 'timestamp' => now()], 200);
+    });
+    
     Route::post('/create', [ReviewController::class, 'store']);
     Route::get('/', [ReviewController::class, 'index']);
     Route::get('/{id}', [ReviewController::class, 'show']);

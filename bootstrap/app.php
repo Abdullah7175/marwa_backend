@@ -15,6 +15,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // Ensure API routes don't get redirected for authentication
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
+            \App\Http\Middleware\ForceJsonResponse::class,
+        ]);
+        
+        // Exclude API routes from CSRF protection
+        $middleware->validateCsrfTokens(except: [
+            'api/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

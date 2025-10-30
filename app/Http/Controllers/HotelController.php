@@ -26,7 +26,9 @@ class HotelController extends Controller
 
     public function index()
     {
-        $hotels = Hotel::all();
+        $hotels = Hotel::all()->map(function ($hotel) {
+            return $this->formatHotelResponse($hotel);
+        });
         return response()->json($hotels, 200);
     }
 
@@ -38,7 +40,37 @@ class HotelController extends Controller
             return response()->json(['error' => 'Hotel not found'], 404);
         }
         
-        return response()->json($hotel, 200);
+        return response()->json($this->formatHotelResponse($hotel), 200);
+    }
+
+    /**
+     * Format hotel data to ensure all required fields are present
+     */
+    private function formatHotelResponse($hotel)
+    {
+        // Extract numeric value from charges string
+        $chargesNumeric = preg_replace('/[^0-9.]/', '', $hotel->charges);
+        $chargesNumeric = $chargesNumeric ? (float) $chargesNumeric : 0;
+        
+        return [
+            'id' => $hotel->id,
+            'name' => $hotel->name ?? '',
+            'location' => $hotel->location ?? '',
+            'charges' => $hotel->charges ?? '0',
+            'charges_numeric' => $chargesNumeric,
+            'rating' => $hotel->rating ?? 0,
+            'image' => $hotel->image ?? '',
+            'description' => $hotel->description ?? '',
+            'currency' => $hotel->currency ?? 'USD',
+            'phone' => $hotel->phone ?? '',
+            'email' => $hotel->email ?? '',
+            'status' => $hotel->status ?? 'active',
+            'breakfast_enabled' => $hotel->breakfast_enabled ?? false,
+            'dinner_enabled' => $hotel->dinner_enabled ?? false,
+            'price_per_night' => ($hotel->currency ?? 'USD') . $chargesNumeric,
+            'created_at' => $hotel->created_at,
+            'updated_at' => $hotel->updated_at,
+        ];
     }
 
     public function store(Request $request)

@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ReviewController extends Controller
 {
@@ -26,22 +27,42 @@ class ReviewController extends Controller
     }
     public function store(Request $request)
     {
-        $request->validate([
-            'user_name' => 'required|string|max:255',
-            'detail' => 'required|string',
-            'video' => 'file|mimes:mp4,mov,avi|max:10240',
-        ]);
+        // Force JSON response and prevent redirects
+        $request->headers->set('Accept', 'application/json');
+        
+        try {
+            $request->validate([
+                'user_name' => 'required|string|max:255',
+                'detail' => 'required|string',
+                'video' => 'nullable|file|mimes:mp4,mov,avi|max:10240', // Made optional since video might not always be uploaded
+            ]);
 
-        $data = $request->only(['user_name', 'detail']);
+            $data = $request->only(['user_name', 'detail']);
 
-        if ($request->hasFile('video')) {
-            $path = $this->save($request->file('video'),'videos');
-            $data['video_url'] = $path;
+            if ($request->hasFile('video')) {
+                $videoFile = $request->file('video');
+                if ($videoFile && $videoFile->isValid()) {
+                    $path = $this->save($videoFile, 'videos');
+                    if ($path) {
+                        $data['video_url'] = $path;
+                    }
+                }
+            }
+
+            $review = Review::create($data);
+
+            return response()->json($review, 201)->header('Content-Type', 'application/json');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422)->header('Content-Type', 'application/json');
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to create review',
+                'message' => $e->getMessage()
+            ], 500)->header('Content-Type', 'application/json');
         }
-
-        $review = Review::create($data);
-
-        return response()->json($review, 201);
     }
 
     public function show($id)

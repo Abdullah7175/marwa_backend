@@ -25,12 +25,55 @@ class PanelController extends Controller
         return response()->json($retS,200);
     }
     public function getAllHotels(){
-        // The hotels table does not have a `status` column in the current schema.
-        // Return all hotels to avoid SQL errors.
-        $res = Hotel::all();
-      
+        $hotels = Hotel::all()->map(function ($hotel) {
+            return $this->formatHotelResponse($hotel);
+        });
 
-        return response()->json($res,200);
+        return response()->json($hotels, 200);
+    }
+
+    /**
+     * Format hotel data to ensure all required fields are present
+     */
+    private function formatHotelResponse($hotel)
+    {
+        // Extract numeric value from charges string
+        $chargesNumeric = preg_replace('/[^0-9.]/', '', $hotel->charges ?? '0');
+        $chargesNumeric = $chargesNumeric ? (float) $chargesNumeric : 0;
+        
+        // Parse rating to ensure it's numeric
+        $rating = $hotel->rating ?? 0;
+        if (!is_numeric($rating)) {
+            if (preg_match('/(\d+\.?\d*)/', $rating, $matches)) {
+                $rating = (float) $matches[1];
+            } else {
+                $rating = 0.0;
+            }
+        } else {
+            $rating = (float) $rating;
+        }
+        
+        $currency = $hotel->currency ?? 'USD';
+        
+        return [
+            'id' => $hotel->id,
+            'name' => $hotel->name ?? '',
+            'location' => $hotel->location ?? '',
+            'charges' => $hotel->charges ?? '0',
+            'charges_numeric' => $chargesNumeric,
+            'rating' => $rating,
+            'image' => $hotel->image ?? '',
+            'description' => $hotel->description ?? '',
+            'currency' => $currency,
+            'phone' => $hotel->phone ?? '',
+            'email' => $hotel->email ?? '',
+            'status' => $hotel->status ?? 'active',
+            'breakfast_enabled' => $hotel->breakfast_enabled ?? false,
+            'dinner_enabled' => $hotel->dinner_enabled ?? false,
+            'price_per_night' => $currency . $chargesNumeric,
+            'created_at' => $hotel->created_at,
+            'updated_at' => $hotel->updated_at,
+        ];
     }
 
     public function updateCategory(Request $request){
