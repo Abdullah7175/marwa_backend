@@ -25,7 +25,9 @@ class PanelController extends Controller
         return response()->json($retS,200);
     }
     public function getAllHotels(){
-        $res = Hotel::where('status','!=','deleted')->get();
+        // The hotels table does not have a `status` column in the current schema.
+        // Return all hotels to avoid SQL errors.
+        $res = Hotel::all();
       
 
         return response()->json($res,200);

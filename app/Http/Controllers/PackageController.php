@@ -44,6 +44,26 @@ class PackageController extends Controller
     public function store(Request $request)
     {
         try {
+            // Normalize incoming scalar types from multipart form-data
+            $booleanFields = [
+                'is_roundtrip','ziyarat','guide','hotel_makkah_enabled','hotel_madina_enabled',
+                'visa_enabled','ticket_enabled','breakfast_enabled','dinner_enabled','transport_enabled'
+            ];
+            $integerFields = ['nights_makkah','nights_madina','nights','category_id'];
+
+            $payload = $request->all();
+            foreach ($booleanFields as $field) {
+                if (array_key_exists($field, $payload)) {
+                    $payload[$field] = in_array((string)$payload[$field], ['1','true','on'], true) ? 1 : 0;
+                }
+            }
+            foreach ($integerFields as $field) {
+                if (array_key_exists($field, $payload)) {
+                    $payload[$field] = (int) $payload[$field];
+                }
+            }
+            $request->merge($payload);
+
             $request->validate([
                 'name' => 'required|string|max:255',
                 'price_single' => 'required|numeric',
@@ -215,6 +235,26 @@ class PackageController extends Controller
     public function update(Request $request)
     {
         try {
+            // Normalize incoming scalar types from multipart form-data
+            $booleanFields = [
+                'is_roundtrip','ziyarat','guide','hotel_makkah_enabled','hotel_madina_enabled',
+                'visa_enabled','ticket_enabled','breakfast_enabled','dinner_enabled','transport_enabled'
+            ];
+            $integerFields = ['nights_makkah','nights_madina','nights','category_id'];
+
+            $payload = $request->all();
+            foreach ($booleanFields as $field) {
+                if (array_key_exists($field, $payload)) {
+                    $payload[$field] = in_array((string)$payload[$field], ['1','true','on'], true) ? 1 : 0;
+                }
+            }
+            foreach ($integerFields as $field) {
+                if (array_key_exists($field, $payload)) {
+                    $payload[$field] = (int) $payload[$field];
+                }
+            }
+            $request->merge($payload);
+
             $request->validate([
                 'id' =>'required',
                 'name' => 'required|string|max:255',
