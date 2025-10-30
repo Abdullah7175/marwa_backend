@@ -26,6 +26,7 @@ class BlogController extends Controller
         try {
             $validatedData = $request->validate([
                 'title' => 'required|string|max:255',
+                'body' => 'nullable|string',
                 'image' => 'required|file',
                 'elements' => 'required|array',
             ]);
@@ -34,6 +35,7 @@ class BlogController extends Controller
 
             $blog = Blog::create([
                 'title' => $validatedData['title'],
+                'body' => $validatedData['body'] ?? '',
                 'image' => $imagePath,
             ]);
             $blog_id = $blog['id'];
@@ -126,6 +128,7 @@ class BlogController extends Controller
             // Validation
             $validatedData = $request->validate([
                 'title' => 'required|string|max:255',
+                'body' => 'nullable|string',
                 'image' => 'nullable|file',
                 'elements' => 'required|array'
             ]);
@@ -144,6 +147,7 @@ class BlogController extends Controller
             // Update blog post
             $blog->update([
                 'title' => $validatedData['title'],
+                'body' => $validatedData['body'] ?? $blog->body,
                 'image' => $imagePath
             ]);
             
