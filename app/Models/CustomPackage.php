@@ -25,4 +25,20 @@ class CustomPackage extends Model
         'hotel_makkah_id',
         'hotel_madina_id',
     ];
+
+    /**
+     * Get the Makkah hotel for this custom package.
+     */
+    public function hotelMakkah()
+    {
+        return $this->belongsTo(Hotel::class, 'hotel_makkah_id');
+    }
+
+    /**
+     * Get the Madina hotel for this custom package.
+     */
+    public function hotelMadina()
+    {
+        return $this->belongsTo(Hotel::class, 'hotel_madina_id');
+    }
 }

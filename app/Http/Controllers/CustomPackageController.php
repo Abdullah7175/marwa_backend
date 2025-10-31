@@ -28,12 +28,26 @@ class CustomPackageController extends Controller
 
     public function index()
     {
-        return CustomPackage::all();
+        $packages = CustomPackage::with(['hotelMakkah', 'hotelMadina'])->get();
+        
+        // Append hotel names to each package
+        return $packages->map(function ($package) {
+            $data = $package->toArray();
+            $data['hotel_makkah_name'] = $package->hotelMakkah ? $package->hotelMakkah->name : null;
+            $data['hotel_madina_name'] = $package->hotelMadina ? $package->hotelMadina->name : null;
+            return $data;
+        });
     }
 
     public function show($id)
     {
-        return CustomPackage::findOrFail($id);
+        $package = CustomPackage::with(['hotelMakkah', 'hotelMadina'])->findOrFail($id);
+        
+        $data = $package->toArray();
+        $data['hotel_makkah_name'] = $package->hotelMakkah ? $package->hotelMakkah->name : null;
+        $data['hotel_madina_name'] = $package->hotelMadina ? $package->hotelMadina->name : null;
+        
+        return $data;
     }
 
     public function store(Request $request)
@@ -108,8 +122,15 @@ class CustomPackageController extends Controller
 
             // Create CustomPackage instance
             $customPackage = CustomPackage::create($packageData);
+            
+            // Load relationships
+            $customPackage->load(['hotelMakkah', 'hotelMadina']);
+            
+            $data = $customPackage->toArray();
+            $data['hotel_makkah_name'] = $customPackage->hotelMakkah ? $customPackage->hotelMakkah->name : null;
+            $data['hotel_madina_name'] = $customPackage->hotelMadina ? $customPackage->hotelMadina->name : null;
     
-            return response()->json($customPackage, 201)->header('Content-Type', 'application/json');
+            return response()->json($data, 201)->header('Content-Type', 'application/json');
         } catch (ValidationException $e) {
             // Return validation errors as JSON response
             return response()->json([
@@ -190,8 +211,15 @@ class CustomPackageController extends Controller
             // Update CustomPackage instance
             $customPackage = CustomPackage::findOrFail($id);
             $customPackage->update($packageData);
+            
+            // Reload with relationships
+            $customPackage->load(['hotelMakkah', 'hotelMadina']);
+            
+            $data = $customPackage->toArray();
+            $data['hotel_makkah_name'] = $customPackage->hotelMakkah ? $customPackage->hotelMakkah->name : null;
+            $data['hotel_madina_name'] = $customPackage->hotelMadina ? $customPackage->hotelMadina->name : null;
     
-            return response()->json($customPackage->fresh(), 200)->header('Content-Type', 'application/json');
+            return response()->json($data, 200)->header('Content-Type', 'application/json');
         } catch (ValidationException $e) {
             // Return validation errors as JSON response
             return response()->json([
