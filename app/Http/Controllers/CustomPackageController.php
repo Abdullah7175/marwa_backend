@@ -44,7 +44,7 @@ class CustomPackageController extends Controller
             
             // Convert string numbers to integers for multipart form data
             $data = $request->all();
-            $integerFields = ['tour_days', 'no_of_travelers', 'hotel_makkah_id', 'hotel_madina_id', 'nights_in_makkah', 'nights_in_madina'];
+            $integerFields = ['tour_days', 'no_of_travelers', 'hotel_makkah_id', 'hotel_madina_id'];
             foreach ($integerFields as $field) {
                 if (isset($data[$field]) && is_string($data[$field]) && is_numeric($data[$field])) {
                     $data[$field] = (int) $data[$field];
@@ -61,15 +61,13 @@ class CustomPackageController extends Controller
                 'city' => 'required|string|max:255',
                 'no_of_travelers' => 'required|integer|min:1',
                 'travelers_visa_details' => 'nullable|string',
-                'phone' => 'required|string|max:255', // Increased max length
+                'phone' => 'required|string|max:255',
                 'email' => 'required|email|max:255',
                 'additional_comments' => 'nullable|string',
-                'signature_image' => 'required|image|mimes:jpeg,png,jpg,gif|max:5120', // Increased to 5MB
+                'signature_image' => 'required|image|mimes:jpeg,png,jpg,gif|max:5120',
                 'total_amount_hotels' => 'required|numeric|min:0',
-                'hotel_makkah_id' => 'nullable|integer|min:0', // Now nullable in DB
-                'hotel_madina_id' => 'nullable|integer|min:0', // Now nullable in DB
-                'nights_in_makkah' => 'nullable|integer|min:0',
-                'nights_in_madina' => 'nullable|integer|min:0',
+                'hotel_makkah_id' => 'nullable|integer|min:0',
+                'hotel_madina_id' => 'nullable|integer|min:0',
             ];
     
             // Perform validation
@@ -106,8 +104,6 @@ class CustomPackageController extends Controller
                 'total_amount_hotels' => (float) $validatedData['total_amount_hotels'],
                 'hotel_makkah_id' => isset($validatedData['hotel_makkah_id']) && $validatedData['hotel_makkah_id'] !== null ? (int) $validatedData['hotel_makkah_id'] : null,
                 'hotel_madina_id' => isset($validatedData['hotel_madina_id']) && $validatedData['hotel_madina_id'] !== null ? (int) $validatedData['hotel_madina_id'] : null,
-                'nights_in_makkah' => isset($validatedData['nights_in_makkah']) ? (int) $validatedData['nights_in_makkah'] : null,
-                'nights_in_madina' => isset($validatedData['nights_in_madina']) ? (int) $validatedData['nights_in_madina'] : null,
             ];
 
             // Create CustomPackage instance
@@ -151,14 +147,11 @@ class CustomPackageController extends Controller
                 'hotel_makkah_id' => 'nullable|integer|min:0',
                 'hotel_madina_id' => 'nullable|integer|min:0',
                 'signature_image' => 'sometimes|image|mimes:jpeg,png,jpg,gif|max:5120',
-                // nights fields are not in DB; accept but ignore
-                'nights_in_makkah' => 'sometimes|integer|min:0',
-                'nights_in_madina' => 'sometimes|integer|min:0',
             ];
     
             // Convert string numbers to integers for multipart form data
             $data = $request->all();
-            $integerFields = ['tour_days', 'no_of_travelers', 'hotel_makkah_id', 'hotel_madina_id', 'nights_in_makkah', 'nights_in_madina'];
+            $integerFields = ['tour_days', 'no_of_travelers', 'hotel_makkah_id', 'hotel_madina_id'];
             foreach ($integerFields as $field) {
                 if (isset($data[$field]) && is_string($data[$field]) && is_numeric($data[$field])) {
                     $data[$field] = (int) $data[$field];
@@ -184,8 +177,6 @@ class CustomPackageController extends Controller
                 'total_amount_hotels' => (float) $validatedData['total_amount_hotels'],
                 'hotel_makkah_id' => isset($validatedData['hotel_makkah_id']) && $validatedData['hotel_makkah_id'] !== null ? (int) $validatedData['hotel_makkah_id'] : null,
                 'hotel_madina_id' => isset($validatedData['hotel_madina_id']) && $validatedData['hotel_madina_id'] !== null ? (int) $validatedData['hotel_madina_id'] : null,
-                'nights_in_makkah' => isset($validatedData['nights_in_makkah']) ? (int) $validatedData['nights_in_makkah'] : null,
-                'nights_in_madina' => isset($validatedData['nights_in_madina']) ? (int) $validatedData['nights_in_madina'] : null,
             ];
             
             // Handle file upload if provided

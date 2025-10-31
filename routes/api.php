@@ -208,15 +208,26 @@ Route::get('/files', function (Request $request) {
         ]);
     }
     
-    // Handle images/ prefix paths (from Next.js or public directory)
+    // Handle images/ prefix paths (from other Next.js or public directory)
+    // This includes images/packages/, images/hotels/, etc.
     if (str_starts_with($path, 'images/')) {
-        $imagesRelative = substr($path, 7);
+        $imagesRelative = substr($path, 7); // Remove 'images/' prefix
         $possiblePaths = array_merge($possiblePaths, [
-            public_path('images/' . $imagesRelative),
-            public_path($path),
-            storage_path('app/public/images/' . $imagesRelative),
-            storage_path('app/public/' . $imagesRelative),
+            public_path('images/' . $imagesRelative),        // public/images/packages/file.jpg
+            public_path($path),                              // public/images/packages/file.jpg (full)
+            storage_path('app/public/images/' . $imagesRelative), // storage/app/public/images/packages/file.jpg
+            storage_path('app/public/' . $imagesRelative),   // storage/app/public/packages/file.jpg
         ]);
+        
+        // Also try package_images and hotel_images directories if path matches
+        if (str_starts_with($imagesRelative, 'packages/')) {
+            $packageFile = substr($imagesRelative, 10); // Remove 'packages/' prefix
+            $possiblePaths[] = storage_path('app/public/package_images/' . $packageFile);
+        }
+        if (str_starts_with($imagesRelative, 'hotels/')) {
+            $hotelFile = substr($imagesRelative, 7); // Remove 'hotels/' prefix
+            $possiblePaths[] = storage_path('app/public/hotel_images/' . $hotelFile);
+        }
     }
     
     $fullPath = null;

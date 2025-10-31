@@ -24,7 +24,5 @@ class CustomPackage extends Model
         'total_amount_hotels',
         'hotel_makkah_id',
         'hotel_madina_id',
-        'nights_in_madina',
-        'nights_in_makkah'
     ];
 }
