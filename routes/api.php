@@ -146,42 +146,77 @@ Route::get('/files', function (Request $request) {
         return response()->json(['error' => 'Access denied - invalid path'], 403);
     }
     
-    // Allow paths starting with storage/ or images/
-    $allowedPrefixes = ['storage/', 'images/'];
+    // Define allowed image directories (for security)
+    $allowedImageDirs = [
+        'package_images',
+        'hotel_images',
+        'blogs_images',
+        'signature_images',
+        'videos',
+    ];
+    
+    // Remove 'storage/' prefix if present for normalization
+    $normalizedPath = $path;
+    if (str_starts_with($path, 'storage/')) {
+        $normalizedPath = substr($path, 8); // Remove 'storage/' prefix
+    }
+    
+    // Check if path starts with an allowed directory or images/
     $isAllowed = false;
-    foreach ($allowedPrefixes as $prefix) {
-        if (str_starts_with($path, $prefix)) {
+    $relativePath = $normalizedPath;
+    
+    // Check if it's a direct image directory path (e.g., package_images/file.jpg)
+    foreach ($allowedImageDirs as $dir) {
+        if (str_starts_with($normalizedPath, $dir . '/') || $normalizedPath === $dir) {
             $isAllowed = true;
             break;
         }
     }
     
+    // Also allow paths starting with storage/ or images/
     if (!$isAllowed) {
-        return response()->json(['error' => 'Access denied - path must start with storage/ or images/'], 403);
+        if (str_starts_with($path, 'storage/') || str_starts_with($path, 'images/')) {
+            $isAllowed = true;
+            $relativePath = str_starts_with($path, 'images/') ? substr($path, 7) : substr($path, 8);
+        }
+    }
+    
+    if (!$isAllowed) {
+        return response()->json([
+            'error' => 'Access denied - path must be in an allowed image directory',
+            'allowed_directories' => array_merge($allowedImageDirs, ['storage/', 'images/'])
+        ], 403);
     }
     
     // Try multiple possible locations for the file
     $possiblePaths = [];
     
+    // All paths should ultimately be in storage/app/public/...
+    $possiblePaths = [
+        storage_path('app/public/' . $normalizedPath), // Direct path (package_images/file.jpg)
+        storage_path('app/public/' . $relativePath),   // Relative path
+        public_path('storage/' . $normalizedPath),     // Symlinked public/storage/...
+        public_path('storage/' . $relativePath),       // Symlinked public/storage/...
+    ];
+    
+    // Also try with the original path format if it had storage/ prefix
     if (str_starts_with($path, 'storage/')) {
-        // Handle storage paths
-        $relativePath = substr($path, 8); // Remove 'storage/' prefix
-        $possiblePaths = [
-            storage_path('app/public/' . $relativePath),
-            storage_path($relativePath),
-            public_path('storage/' . $relativePath),
-            public_path($path), // Public directory with full path
-        ];
-    } elseif (str_starts_with($path, 'images/')) {
-        // Handle images paths (from public directory or Next.js)
-        $relativePath = substr($path, 7); // Remove 'images/' prefix
-        $possiblePaths = [
-            public_path('images/' . $relativePath), // Public/images/...
-            public_path($path), // Public/images/... (full path)
-            storage_path('app/public/' . $path), // In case images are in storage
-            base_path('public/' . $path), // Alternative public path
-            storage_path('app/public/images/' . $relativePath), // Storage with images prefix
-        ];
+        $originalRelative = substr($path, 8);
+        $possiblePaths = array_merge($possiblePaths, [
+            storage_path('app/public/' . $originalRelative),
+            public_path('storage/' . $originalRelative),
+        ]);
+    }
+    
+    // Handle images/ prefix paths (from Next.js or public directory)
+    if (str_starts_with($path, 'images/')) {
+        $imagesRelative = substr($path, 7);
+        $possiblePaths = array_merge($possiblePaths, [
+            public_path('images/' . $imagesRelative),
+            public_path($path),
+            storage_path('app/public/images/' . $imagesRelative),
+            storage_path('app/public/' . $imagesRelative),
+        ]);
     }
     
     $fullPath = null;
@@ -206,7 +241,11 @@ Route::get('/files', function (Request $request) {
     }
     
     if (!$fullPath) {
-        return response()->json(['error' => 'File not found'], 404);
+        return response()->json([
+            'error' => 'File not found',
+            'searched_paths' => $possiblePaths,
+            'requested_path' => $path
+        ], 404);
     }
     
     $mimeType = mime_content_type($fullPath);

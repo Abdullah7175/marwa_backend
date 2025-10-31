@@ -11,6 +11,7 @@ use App\Models\Blog;
 use App\Models\BlogElement;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 
 class WebController extends Controller
 {
@@ -49,30 +50,43 @@ class WebController extends Controller
 
    public function createIquiry(Request $request)
    {
-       // Validation rules
-       $rules = [
-           'name' => 'required|string',
-           'email' => 'required|email',
-           'phone' => 'required|string',
-           'message' => 'required|string',
-       ];
+       try {
+           // Force JSON response to prevent redirects
+           $request->headers->set('Accept', 'application/json');
+           
+           // Validation rules
+           $rules = [
+               'name' => 'required|string|max:255',
+               'email' => 'required|email|max:255',
+               'phone' => 'required|string|max:255',
+               'message' => 'required|string',
+           ];
 
-       // Validate the request data
-       $validator = Validator::make($request->all(), $rules);
+           // Validate the request data
+           $validatedData = $request->validate($rules);
 
-       // If validation fails, return error response
-       if ($validator->fails()) {
-           return response()->json(['errors' => $validator->errors()], 200);
+           // Create inquiry
+           $inquiry = Inquiry::create($validatedData);
+
+           // Fire webhook (non-blocking best-effort)
+           $this->postInquiryToWebhook($inquiry);
+
+           // Return success response
+           return response()->json([
+               'message' => 'Inquiry created successfully',
+               'inquiry' => $inquiry
+           ], 201)->header('Content-Type', 'application/json');
+       } catch (ValidationException $e) {
+           return response()->json([
+               'errors' => $e->errors(),
+               'message' => 'Validation failed'
+           ], 422)->header('Content-Type', 'application/json');
+       } catch (\Exception $e) {
+           return response()->json([
+               'error' => 'Failed to create inquiry',
+               'message' => $e->getMessage()
+           ], 500)->header('Content-Type', 'application/json');
        }
-
-       // Create inquiry
-       $inquiry = Inquiry::create($validator->validated());
-
-       // Fire webhook (non-blocking best-effort)
-       $this->postInquiryToWebhook($inquiry);
-
-       // Return success response
-       return response()->json(['message' => 'Inquiry created successfully', 'inquiry' => $inquiry], 201);
    }
 
 
