@@ -19,6 +19,7 @@ Route::prefix('blogs')->group(function () {
     Route::get('/', [BlogController::class, 'index']);
     Route::get('/{id}', [BlogController::class, 'show']);
     Route::put('/{id}', [BlogController::class, 'update']);
+    Route::post('/{id}', [BlogController::class, 'update']); // Also support POST for updates (useful for file uploads)
     Route::delete('/{id}', [BlogController::class, 'destroy']);
 });
 
