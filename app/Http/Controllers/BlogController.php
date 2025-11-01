@@ -21,6 +21,7 @@ class BlogController extends Controller
         }
         return null;
     }
+    
     public function store(Request $request)
     {
         try {
@@ -43,6 +44,7 @@ class BlogController extends Controller
             $elements = $validatedData['elements'];
             $normalizedElements = [];
 
+            // Normalize elements from JSON strings or arrays
             foreach ($elements as $index => $item) {
                 if (is_string($item)) {
                     $decoded = json_decode($item, true);
@@ -61,63 +63,81 @@ class BlogController extends Controller
                 }
             }
 
+            // Create elements with sections and ordering support
             foreach ($normalizedElements as $index => $e) {
-                if (!isset($e['element_type']) || !isset($e['value'])) {
+                if (!isset($e['element_type'])) {
                     throw ValidationException::withMessages([
-                        "elements.$index" => ['Each element must include element_type and value.'],
+                        "elements.$index" => ['Each element must include element_type.'],
                     ]);
                 }
 
+                $elementData = [
+                    'element_type' => $e['element_type'],
+                    'blog_id' => $blog_id,
+                    'section_title' => $e['section_title'] ?? null,
+                    'order' => $e['order'] ?? $index,
+                ];
+
+                // Handle image elements
                 if ($e['element_type'] === 'image') {
-                    $fieldName = $e['value'];
-                    if (!$request->hasFile($fieldName)) {
+                    $fieldName = $e['value'] ?? null;
+                    if ($fieldName && $request->hasFile($fieldName)) {
+                        $elemImagePath = $this->saveImage($request->file($fieldName), 'blogs_images');
+                        $elementData['value'] = $elemImagePath;
+                    } elseif (isset($e['value']) && filter_var($e['value'], FILTER_VALIDATE_URL)) {
+                        // If it's already a URL (existing image), use it
+                        $elementData['value'] = $e['value'];
+                    } else {
                         throw ValidationException::withMessages([
-                            "elements.$index" => ["Image field '$fieldName' not found in request."],
+                            "elements.$index" => ["Image field '$fieldName' not found in request or invalid value."],
                         ]);
                     }
-                    $elemImagePath = $this->saveImage($request->file($fieldName), 'blogs_images');
-                    BlogElement::create([
-                        'element_type' => 'image',
-                        'value' => $elemImagePath,
-                        'blog_id' => $blog_id,
-                    ]);
                 } else {
-                    BlogElement::create([
-                        'element_type' => $e['element_type'],
-                        'value' => $e['value'],
-                        'blog_id' => $blog_id,
-                    ]);
+                    // For non-image elements, use the value directly
+                    $elementData['value'] = $e['value'] ?? '';
                 }
+
+                BlogElement::create($elementData);
             }
 
-            return response()->json($blog, 201);
+            // Load blog with elements for response
+            $blog->load('elements');
+            $data = $blog->toArray();
+            $data['elements'] = $blog->elements;
+            $data['elements_by_sections'] = $blog->getElementsBySections();
+
+            return response()->json($data, 201);
         } catch (ValidationException $e) {
             return response()->json(['error' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to create blog', 'message' => $e->getMessage()], 500);
         }
     }
+    
     public function index()
     {
-        $blogs = Blog::all();
+        $blogs = Blog::with('elements')->get();
         $res = [];
         foreach($blogs as $b){
            $data = $b->toArray();
-           $elements = BlogElement::where('blog_id',$b['id'])->get();
-           $res[] = array_merge($data,['elements'=>$elements]);
+           $data['elements'] = $b->elements;
+           $data['elements_by_sections'] = $b->getElementsBySections();
+           $res[] = $data;
         }
         return response()->json($res, 200);
     }
 
     public function show($id)
     {
-        $blog = Blog::find($id);
+        $blog = Blog::with('elements')->find($id);
         
         if (!$blog) {
             return response()->json(['error' => 'Blog not found'], 404);
         }
         
         $data = $blog->toArray();
-        $elements = BlogElement::where('blog_id', $blog->id)->get();
-        $data['elements'] = $elements;
+        $data['elements'] = $blog->elements;
+        $data['elements_by_sections'] = $blog->getElementsBySections();
         
         return response()->json($data, 200);
     }
@@ -138,7 +158,7 @@ class BlogController extends Controller
                 return response()->json(['error' => 'Blog not found'], 404);
             }
 
-            // Handle image update
+            // Handle main image update
             $imagePath = $blog->image;
             if($request->hasFile('image')){
                 $imagePath = $this->saveImage($request->file('image'), 'blogs_images');
@@ -154,35 +174,79 @@ class BlogController extends Controller
             // Delete existing elements
             BlogElement::where('blog_id', $id)->delete();
 
-            // Add new elements
+            // Normalize and add new elements
             $elements = $validatedData['elements'];
-            $elementsArray = [];
-            foreach ($elements as $jsonString) {
-                $elementsArray[] = json_decode($jsonString, true);
-            }
-            
-            // Create new elements
-            foreach ($elementsArray as $e) {
-                if ($e['element_type'] === 'image' && isset($e['value']) && $request->hasFile($e['value'])) {
-                    $imagePath = $this->saveImage($request->file($e['value']), 'blogs_images');
-                    BlogElement::create([
-                        'element_type' => 'image',
-                        'value' => $imagePath,
-                        'blog_id' => $id
-                    ]);
+            $normalizedElements = [];
+
+            // Normalize elements from JSON strings or arrays
+            foreach ($elements as $index => $item) {
+                if (is_string($item)) {
+                    $decoded = json_decode($item, true);
+                    if ($decoded === null || !is_array($decoded)) {
+                        throw ValidationException::withMessages([
+                            "elements.$index" => ['Invalid JSON element.'],
+                        ]);
+                    }
+                    $normalizedElements[] = $decoded;
+                } elseif (is_array($item)) {
+                    $normalizedElements[] = $item;
                 } else {
-                    BlogElement::create([
-                        'element_type' => $e['element_type'],
-                        'value' => $e['value'],
-                        'blog_id' => $id
+                    throw ValidationException::withMessages([
+                        "elements.$index" => ['Element must be JSON string or object.'],
                     ]);
                 }
             }
+
+            // Create new elements with sections and ordering
+            foreach ($normalizedElements as $index => $e) {
+                if (!isset($e['element_type'])) {
+                    throw ValidationException::withMessages([
+                        "elements.$index" => ['Each element must include element_type.'],
+                    ]);
+                }
+
+                $elementData = [
+                    'element_type' => $e['element_type'],
+                    'blog_id' => $id,
+                    'section_title' => $e['section_title'] ?? null,
+                    'order' => $e['order'] ?? $index,
+                ];
+
+                // Handle image elements
+                if ($e['element_type'] === 'image') {
+                    $fieldName = $e['value'] ?? null;
+                    if ($fieldName && $request->hasFile($fieldName)) {
+                        // New image uploaded
+                        $elemImagePath = $this->saveImage($request->file($fieldName), 'blogs_images');
+                        $elementData['value'] = $elemImagePath;
+                    } elseif (isset($e['value']) && (filter_var($e['value'], FILTER_VALIDATE_URL) || strpos($e['value'], '/storage/') === 0)) {
+                        // Existing image URL, keep it
+                        $elementData['value'] = $e['value'];
+                    } else {
+                        throw ValidationException::withMessages([
+                            "elements.$index" => ["Image field '$fieldName' not found in request or invalid value."],
+                        ]);
+                    }
+                } else {
+                    // For non-image elements, use the value directly
+                    $elementData['value'] = $e['value'] ?? '';
+                }
+
+                BlogElement::create($elementData);
+            }
             
-            return response()->json(['message' => 'Blog updated successfully', 'blog' => $blog], 200);
+            // Reload blog with elements
+            $blog->load('elements');
+            $data = $blog->toArray();
+            $data['elements'] = $blog->elements;
+            $data['elements_by_sections'] = $blog->getElementsBySections();
+            
+            return response()->json(['message' => 'Blog updated successfully', 'blog' => $data], 200);
             
         } catch (ValidationException $e) {
             return response()->json(['error' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to update blog', 'message' => $e->getMessage()], 500);
         }
     }
 

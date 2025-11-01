@@ -69,4 +69,31 @@ class Blog extends Model
     {
         return $value ?: $this->image;
     }
+
+    /**
+     * Get all elements for this blog, ordered by section and order
+     */
+    public function elements()
+    {
+        return $this->hasMany(BlogElement::class)->orderBy('section_title')->orderBy('order');
+    }
+
+    /**
+     * Get elements grouped by sections
+     */
+    public function getElementsBySections()
+    {
+        $elements = $this->elements;
+        $grouped = [];
+        
+        foreach ($elements as $element) {
+            $section = $element->section_title ?? 'main';
+            if (!isset($grouped[$section])) {
+                $grouped[$section] = [];
+            }
+            $grouped[$section][] = $element;
+        }
+        
+        return $grouped;
+    }
 }
