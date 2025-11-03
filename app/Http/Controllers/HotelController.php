@@ -100,31 +100,48 @@ class HotelController extends Controller
     public function store(Request $request)
     {
         try {
+            // Normalize incoming scalar types from multipart form-data
+            $booleanFields = ['breakfast_enabled', 'dinner_enabled'];
+            
+            $payload = $request->all();
+            foreach ($booleanFields as $field) {
+                if (array_key_exists($field, $payload)) {
+                    $payload[$field] = in_array((string)$payload[$field], ['1','true','on'], true) ? 1 : 0;
+                }
+            }
+            $request->merge($payload);
+
+            // Match database schema: charges is varchar(255), not numeric
             $request->validate([
                 'name' => 'required|string|max:255',
-                'charges' => 'required|numeric',
-                'description' => 'required|string',
-                'rating' => 'required|numeric',
-                'location' => 'required|string',           
-                'currency' => 'required|string|max:10',               
-                'email' => 'required|email',             
-                'phone' => 'required|string|max:20',         
-                'breakfast_enabled' => 'required|boolean',
-                'dinner_enabled' => 'required|boolean',
-                'image' =>'required'
-              
+                'location' => 'required|string|max:255',
+                'charges' => 'required|string|max:255',
+                'rating' => 'required|string|max:255',
+                'image' => 'required|file|image',
+                'description' => 'required|string|max:255',
+                'currency' => 'nullable|string|max:255',
+                'email' => 'nullable|email|max:255',
+                'phone' => 'nullable|string|max:255',
+                'breakfast_enabled' => 'nullable',
+                'dinner_enabled' => 'nullable',
+                'status' => 'nullable|string|max:255'
+            ], [
+                'image.image' => 'The image must be an image file.',
+                'image.required' => 'The image field is required.',
             ]);
+            
             $data = $request->only([
                 'name',
-                'rating',
                 'location',
                 'charges',
+                'rating',
                 'description',
                 'currency',
                 'email',
                 'phone',
                 'breakfast_enabled',
-                'dinner_enabled' 
+                'dinner_enabled',
+                'status'
             ]);
 
 
@@ -152,37 +169,68 @@ class HotelController extends Controller
                 'hotel' => $this->formatHotelResponse($hotel)
             ], 201);
         } catch (ValidationException $e) {
-            return response()->json(['errors' => $e->errors()], 422);
+            return response()->json([
+                'errors' => $e->errors(),
+                'message' => 'Validation failed. Please check the errors below.',
+                'received_data' => $request->except(['image'])
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Hotel creation error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            return response()->json([
+                'error' => 'Failed to create hotel',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
     public function update(Request $request)
     {
         try {
+            // Normalize incoming scalar types from multipart form-data
+            $booleanFields = ['breakfast_enabled', 'dinner_enabled'];
+            
+            $payload = $request->all();
+            foreach ($booleanFields as $field) {
+                if (array_key_exists($field, $payload)) {
+                    $payload[$field] = in_array((string)$payload[$field], ['1','true','on'], true) ? 1 : 0;
+                }
+            }
+            $request->merge($payload);
+
+            // Match database schema: charges is varchar(255), not numeric
             $request->validate([
-                'id' =>'required',
+                'id' => 'required',
                 'name' => 'required|string|max:255',
-                'charges' => 'required|numeric',
-                'description' => 'required|string',
-                'rating' => 'required|numeric',
-                'location' => 'required|string',           
-                'currency' => 'required|string|max:10',               
-                'email' => 'required|email',             
-                'phone' => 'required|string|max:20',         
-                'breakfast_enabled' => 'required|boolean',
-                'dinner_enabled' => 'required|boolean'
-             
+                'location' => 'required|string|max:255',
+                'charges' => 'required|string|max:255',
+                'rating' => 'required|string|max:255',
+                'description' => 'required|string|max:255',
+                'image' => 'nullable|file|image',
+                'currency' => 'nullable|string|max:255',
+                'email' => 'nullable|email|max:255',
+                'phone' => 'nullable|string|max:255',
+                'breakfast_enabled' => 'nullable',
+                'dinner_enabled' => 'nullable',
+                'status' => 'nullable|string|max:255'
+            ], [
+                'image.image' => 'The image must be an image file.',
             ]);
+            
             $data = $request->only([
                 'name',
-                'rating',
                 'location',
                 'charges',
+                'rating',
                 'description',
                 'currency',
                 'email',
                 'phone',
                 'breakfast_enabled',
-                'dinner_enabled' 
+                'dinner_enabled',
+                'status'
             ]);
 
 
@@ -217,7 +265,20 @@ class HotelController extends Controller
                 'hotel' => $this->formatHotelResponse($hotel)
             ], 200);
         } catch (ValidationException $e) {
-            return response()->json(['errors' => $e->errors()], 422);
+            return response()->json([
+                'errors' => $e->errors(),
+                'message' => 'Validation failed. Please check the errors below.'
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Hotel update error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            return response()->json([
+                'error' => 'Failed to update hotel',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
     
