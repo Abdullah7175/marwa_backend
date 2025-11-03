@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use App\Models\Hotel;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\QueryException;
 class HotelController extends Controller
 {
     /**
@@ -130,39 +131,79 @@ class HotelController extends Controller
                 'image.required' => 'The image field is required.',
             ]);
             
-            $data = $request->only([
-                'name',
-                'location',
-                'charges',
-                'rating',
-                'description',
-                'currency',
-                'email',
-                'phone',
-                'breakfast_enabled',
-                'dinner_enabled',
-                'status'
-            ]);
+            // Prepare data - start with required fields that definitely exist
+            $data = [
+                'name' => $request->input('name'),
+                'location' => $request->input('location'),
+                'charges' => $request->input('charges'),
+                'rating' => $request->input('rating'),
+                'description' => $request->input('description'),
+            ];
 
-
-
-      
-            if(isset($_FILES['image'])==true){
-                $image = $_FILES['image'];
-                if(!$image){
-                    return response()->json(['error'=>'please put image ok']);
+            // Add optional fields - will fail gracefully if columns don't exist
+            $optionalFields = ['currency', 'email', 'phone', 'status', 'breakfast_enabled', 'dinner_enabled'];
+            foreach ($optionalFields as $field) {
+                if ($request->has($field)) {
+                    $value = $request->input($field);
+                    // Convert boolean fields to 0/1 for database
+                    if (in_array($field, ['breakfast_enabled', 'dinner_enabled'])) {
+                        $value = in_array((string)$value, ['1','true','on'], true) ? 1 : 0;
+                    }
+                    // Only add if not null or empty string (for string fields)
+                    if ($value !== null && $value !== '') {
+                        $data[$field] = $value;
+                    }
                 }
-                $imagePath = $this->saveImage($request->file('image'), 'hotel_images');
-
-                $data['image'] = $imagePath;
-                
-
-            }else{
-               return response()->json(['error'=>'please put image']);
             }
-            
 
-            $hotel = Hotel::create($data);
+            // Handle image upload
+            if (!$request->hasFile('image')) {
+                return response()->json([
+                    'error' => 'Image is required',
+                    'message' => 'The image field is required.'
+                ], 422);
+            }
+
+            $imagePath = $this->saveImage($request->file('image'), 'hotel_images');
+            
+            if (!$imagePath) {
+                return response()->json([
+                    'error' => 'Failed to save image',
+                    'message' => 'The uploaded image could not be saved. Please try again.'
+                ], 422);
+            }
+
+            $data['image'] = $imagePath;
+
+            // Create hotel with error handling for missing columns
+            try {
+                $hotel = Hotel::create($data);
+            } catch (QueryException $dbEx) {
+                // Catch database errors (like missing columns)
+                $errorMessage = $dbEx->getMessage();
+                
+                // Check if it's a column not found error
+                if (strpos($errorMessage, 'Unknown column') !== false || 
+                    strpos($errorMessage, 'doesn\'t exist') !== false ||
+                    strpos($errorMessage, 'Column not found') !== false) {
+                    \Log::error('Hotels table missing columns: ' . $errorMessage);
+                    return response()->json([
+                        'error' => 'Database schema mismatch',
+                        'message' => 'The hotels table is missing required columns (currency, email, phone, status, breakfast_enabled, dinner_enabled).',
+                        'fix' => 'Run the SQL file: fix_hotels_table.sql in your database, or execute: ' .
+                            'ALTER TABLE hotels ADD COLUMN currency VARCHAR(255) NULL DEFAULT "USD" AFTER description, ' .
+                            'ADD COLUMN phone VARCHAR(255) NULL AFTER currency, ' .
+                            'ADD COLUMN email VARCHAR(255) NULL AFTER phone, ' .
+                            'ADD COLUMN status VARCHAR(255) NULL DEFAULT "active" AFTER email, ' .
+                            'ADD COLUMN breakfast_enabled TINYINT(1) DEFAULT 0 AFTER status, ' .
+                            'ADD COLUMN dinner_enabled TINYINT(1) DEFAULT 0 AFTER breakfast_enabled;',
+                        'db_error' => $errorMessage
+                    ], 500);
+                }
+                
+                // Re-throw if it's a different database error
+                throw $dbEx;
+            }
     
             return response()->json([
                 'message' => 'Hotel created successfully', 
