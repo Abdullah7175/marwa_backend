@@ -131,6 +131,16 @@ class BlogController extends Controller
                 'body' => 'nullable|string',
                 'image' => 'required|file',
                 'elements' => 'required|array',
+                // SEO fields
+                'meta_title' => 'nullable|string|max:255',
+                'meta_description' => 'nullable|string',
+                'meta_keywords' => 'nullable|string|max:255',
+                'og_title' => 'nullable|string|max:255',
+                'og_description' => 'nullable|string',
+                'og_image' => 'nullable|string|max:255',
+                'twitter_title' => 'nullable|string|max:255',
+                'twitter_description' => 'nullable|string',
+                'twitter_image' => 'nullable|string|max:255',
             ]);
 
             $imagePath = $this->saveImage($request->file('image'), 'blogs_images');
@@ -139,6 +149,15 @@ class BlogController extends Controller
                 'title' => $validatedData['title'],
                 'body' => $validatedData['body'] ?? '',
                 'image' => $imagePath,
+                'meta_title' => $validatedData['meta_title'] ?? null,
+                'meta_description' => $validatedData['meta_description'] ?? null,
+                'meta_keywords' => $validatedData['meta_keywords'] ?? null,
+                'og_title' => $validatedData['og_title'] ?? null,
+                'og_description' => $validatedData['og_description'] ?? null,
+                'og_image' => $validatedData['og_image'] ?? null,
+                'twitter_title' => $validatedData['twitter_title'] ?? null,
+                'twitter_description' => $validatedData['twitter_description'] ?? null,
+                'twitter_image' => $validatedData['twitter_image'] ?? null,
             ]);
             $blog_id = $blog['id'];
 
@@ -250,7 +269,17 @@ class BlogController extends Controller
                 'title' => 'required|string|max:255',
                 'body' => 'nullable|string',
                 'image' => 'nullable|file',
-                'elements' => 'required|array'
+                'elements' => 'required|array',
+                // SEO fields
+                'meta_title' => 'nullable|string|max:255',
+                'meta_description' => 'nullable|string',
+                'meta_keywords' => 'nullable|string|max:255',
+                'og_title' => 'nullable|string|max:255',
+                'og_description' => 'nullable|string',
+                'og_image' => 'nullable|string|max:255',
+                'twitter_title' => 'nullable|string|max:255',
+                'twitter_description' => 'nullable|string',
+                'twitter_image' => 'nullable|string|max:255',
             ]);
 
             $blog = Blog::find($id);
@@ -293,7 +322,16 @@ class BlogController extends Controller
             $updateData = [
                 'title' => $validatedData['title'],
                 'image' => $imagePath,
-                'body' => $request->input('body', $validatedData['body'] ?? $blog->body ?? '')
+                'body' => $request->input('body', $validatedData['body'] ?? $blog->body ?? ''),
+                'meta_title' => $validatedData['meta_title'] ?? null,
+                'meta_description' => $validatedData['meta_description'] ?? null,
+                'meta_keywords' => $validatedData['meta_keywords'] ?? null,
+                'og_title' => $validatedData['og_title'] ?? null,
+                'og_description' => $validatedData['og_description'] ?? null,
+                'og_image' => $validatedData['og_image'] ?? null,
+                'twitter_title' => $validatedData['twitter_title'] ?? null,
+                'twitter_description' => $validatedData['twitter_description'] ?? null,
+                'twitter_image' => $validatedData['twitter_image'] ?? null,
             ];
             
             // Ensure body is never null (database constraint)
