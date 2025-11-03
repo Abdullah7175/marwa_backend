@@ -126,6 +126,15 @@ class BlogController extends Controller
     public function store(Request $request)
     {
         try {
+            // Log incoming request for debugging
+            \Log::info('Blog creation request received', [
+                'title' => $request->input('title'),
+                'elements_count' => is_array($request->input('elements')) ? count($request->input('elements')) : 0,
+                'elements_raw' => $request->input('elements'),
+                'all_files' => array_keys($request->allFiles()),
+                'all_inputs' => array_keys($request->all())
+            ]);
+
             $validatedData = $request->validate([
                 'title' => 'required|string|max:255',
                 'body' => 'nullable|string',
@@ -184,7 +193,17 @@ class BlogController extends Controller
             }
 
             // Create elements with sections and ordering support
+            \Log::info('Processing ' . count($normalizedElements) . ' normalized elements');
+            
             foreach ($normalizedElements as $index => $e) {
+                \Log::info("Processing element $index", [
+                    'element_type' => $e['element_type'] ?? 'NOT SET',
+                    'section_title' => $e['section_title'] ?? null,
+                    'order' => $e['order'] ?? $index,
+                    'value_type' => gettype($e['value'] ?? null),
+                    'value_preview' => is_string($e['value'] ?? null) ? substr($e['value'], 0, 100) : 'N/A'
+                ]);
+                
                 if (!isset($e['element_type'])) {
                     throw ValidationException::withMessages([
                         "elements.$index" => ['Each element must include element_type.'],
@@ -223,17 +242,30 @@ class BlogController extends Controller
                     $elementData['value'] = $e['value'] ?? '';
                 }
 
-                BlogElement::create($elementData);
+                $createdElement = BlogElement::create($elementData);
+                \Log::info("Element created successfully", ['element_id' => $createdElement->id, 'type' => $createdElement->element_type]);
             }
 
             // Load blog with elements for response
             $blog->load('elements');
+            \Log::info('Blog created successfully', [
+                'blog_id' => $blog->id,
+                'elements_loaded' => $blog->elements->count()
+            ]);
+            
             $data = $this->formatBlogResponse($blog);
 
             return response()->json($data, 201);
         } catch (ValidationException $e) {
+            \Log::error('Validation error in blog creation', ['errors' => $e->errors()]);
             return response()->json(['error' => $e->errors()], 422);
         } catch (\Exception $e) {
+            \Log::error('Exception in blog creation', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json(['error' => 'Failed to create blog', 'message' => $e->getMessage()], 500);
         }
     }
