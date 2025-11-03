@@ -8,6 +8,7 @@ use App\Models\Blog;
 use App\Models\BlogElement;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 
 class BlogController extends Controller
 {
@@ -175,6 +176,27 @@ class BlogController extends Controller
                 return response()->json(['error' => 'Blog not found'], 404);
             }
 
+            // Check if required database columns exist (early detection)
+            try {
+                $testColumns = Schema::getColumnListing('blog_elements');
+                $hasSectionTitle = in_array('section_title', $testColumns);
+                $hasOrder = in_array('order', $testColumns);
+                
+                if (!$hasSectionTitle || !$hasOrder) {
+                    return response()->json([
+                        'error' => 'Database migration required',
+                        'message' => 'The blog_elements table is missing required columns. Please run the SQL: ALTER TABLE blog_elements ADD COLUMN section_title VARCHAR(255) NULL AFTER element_type, ADD COLUMN `order` INT DEFAULT 0 AFTER section_title;',
+                        'missing_columns' => [
+                            'section_title' => !$hasSectionTitle,
+                            'order' => !$hasOrder
+                        ]
+                    ], 500);
+                }
+            } catch (\Exception $schemaEx) {
+                // If schema check fails, continue anyway - will fail later with better error
+                \Log::warning('Could not check database schema: ' . $schemaEx->getMessage());
+            }
+
             // Handle main image update
             $imagePath = $blog->image;
             if($request->hasFile('image')){
@@ -237,12 +259,17 @@ class BlogController extends Controller
                     ]);
                 }
 
-                $elementData = [
-                    'element_type' => $e['element_type'],
-                    'blog_id' => $id,
-                    'section_title' => isset($e['section_title']) && $e['section_title'] !== '' ? $e['section_title'] : null,
-                    'order' => isset($e['order']) ? (int)$e['order'] : $index,
-                ];
+                try {
+                    $elementData = [
+                        'element_type' => $e['element_type'],
+                        'blog_id' => $id,
+                        'section_title' => isset($e['section_title']) && $e['section_title'] !== '' ? $e['section_title'] : null,
+                        'order' => isset($e['order']) ? (int)$e['order'] : $index,
+                    ];
+                } catch (\Exception $ex) {
+                    \Log::error('Element data preparation error: ' . $ex->getMessage());
+                    throw $ex;
+                }
 
                 // Handle image elements
                 if ($e['element_type'] === 'image') {
@@ -302,7 +329,27 @@ class BlogController extends Controller
 
                 // Only create element if we have valid data
                 if (isset($elementData['value']) || $elementData['element_type'] !== 'image') {
-                    BlogElement::create($elementData);
+                    try {
+                        BlogElement::create($elementData);
+                    } catch (\Illuminate\Database\QueryException $dbEx) {
+                        // Catch database errors (like missing columns)
+                        \Log::error('Database error creating blog element: ' . $dbEx->getMessage(), [
+                            'element_data' => $elementData,
+                            'sql_error' => $dbEx->getSql(),
+                            'bindings' => $dbEx->getBindings()
+                        ]);
+                        
+                        // If it's a column not found error, provide helpful message
+                        if (strpos($dbEx->getMessage(), 'Unknown column') !== false || 
+                            strpos($dbEx->getMessage(), 'doesn\'t exist') !== false) {
+                            throw new \Exception(
+                                'Database column missing. Please run the migration to add section_title and order columns to blog_elements table. ' .
+                                'Error: ' . $dbEx->getMessage()
+                            );
+                        }
+                        
+                        throw $dbEx;
+                    }
                 }
             }
             
