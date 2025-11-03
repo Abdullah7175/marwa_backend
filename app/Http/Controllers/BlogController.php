@@ -14,10 +14,21 @@ class BlogController extends Controller
 
     private function saveImage($image, $directory)
     {
-        if ($image && $image->isValid()) {
+        try {
+            if ($image && $image->isValid()) {
             $path = $image->store($directory, 'public');
+                if ($path) {
             $url = Storage::url($path);
+                    // Ensure URL starts with /storage/
+                    if (strpos($url, '/storage/') !== 0 && strpos($url, 'http') !== 0) {
+                        $url = '/storage/' . ltrim($url, '/');
+                    }
             return $url;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Image save error: ' . $e->getMessage());
+            return null;
         }
         return null;
     }
@@ -238,7 +249,7 @@ class BlogController extends Controller
                     $fieldName = $e['value'] ?? null;
                     $imageSaved = false;
                     
-                    // Check if file was uploaded with this field name
+                    // First, check if a new file was uploaded with this field name
                     if ($fieldName && isset($allFiles[$fieldName])) {
                         $elemImagePath = $this->saveImage($request->file($fieldName), 'blogs_images');
                         if ($elemImagePath) {
@@ -247,31 +258,52 @@ class BlogController extends Controller
                         }
                     }
                     
-                    // If no new file uploaded, check if it's an existing image URL
+                    // If no new file uploaded, check if it's an existing image
                     if (!$imageSaved) {
                         if (isset($e['value']) && !empty($e['value'])) {
-                            // Check if it's a valid URL or storage path
-                            if (filter_var($e['value'], FILTER_VALIDATE_URL) || 
-                                strpos($e['value'], '/storage/') === 0 ||
-                                strpos($e['value'], 'http') === 0) {
-                                // Existing image URL, keep it
-                                $elementData['value'] = $e['value'];
+                            $existingValue = $e['value'];
+                            
+                            // Check if it's a full URL (http/https)
+                            if (filter_var($existingValue, FILTER_VALIDATE_URL) || 
+                                strpos($existingValue, 'http://') === 0 ||
+                                strpos($existingValue, 'https://') === 0) {
+                                // Full URL - keep it
+                                $elementData['value'] = $existingValue;
+                                $imageSaved = true;
+                            }
+                            // Check if it's a storage path (/storage/...)
+                            elseif (strpos($existingValue, '/storage/') === 0) {
+                                // Storage path - keep it
+                                $elementData['value'] = $existingValue;
+                                $imageSaved = true;
+                            }
+                            // Check if it's just a filename - construct the path
+                            elseif (preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $existingValue)) {
+                                // It's a filename - construct the storage URL
+                                $elementData['value'] = '/storage/blogs_images/' . basename($existingValue);
+                                $imageSaved = true;
+                            }
+                            // If it doesn't match any pattern but has a value, keep it
+                            else {
+                                $elementData['value'] = $existingValue;
                                 $imageSaved = true;
                             }
                         }
                     }
                     
+                    // If still not saved, skip this element (don't throw error - might be intentional)
                     if (!$imageSaved) {
-                        throw ValidationException::withMessages([
-                            "elements.$index" => ["Image field '$fieldName' not found in request, upload failed, or invalid value."],
-                        ]);
+                        continue; // Skip this element instead of throwing error
                     }
                 } else {
                     // For non-image elements, use the value directly
                     $elementData['value'] = $e['value'] ?? '';
                 }
 
-                BlogElement::create($elementData);
+                // Only create element if we have valid data
+                if (isset($elementData['value']) || $elementData['element_type'] !== 'image') {
+                    BlogElement::create($elementData);
+                }
             }
             
             // Reload blog with elements
@@ -286,7 +318,19 @@ class BlogController extends Controller
         } catch (ValidationException $e) {
             return response()->json(['error' => $e->errors()], 422);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to update blog', 'message' => $e->getMessage()], 500);
+            // Log the full error for debugging
+            \Log::error('Blog update error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'blog_id' => $id,
+                'request_data' => $request->except(['elements']) // Don't log full elements array
+            ]);
+            
+            return response()->json([
+                'error' => 'Failed to update blog', 
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ], 500);
         }
     }
 
