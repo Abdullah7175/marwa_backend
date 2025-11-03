@@ -207,17 +207,16 @@ class BlogController extends Controller
             }
             
             // Update blog post - explicitly handle body field
+            // Database requires body to be NOT NULL, so always set it (even if empty string)
             $updateData = [
                 'title' => $validatedData['title'],
-                'image' => $imagePath
+                'image' => $imagePath,
+                'body' => $request->input('body', $validatedData['body'] ?? $blog->body ?? '')
             ];
             
-            // Handle body field - check if it exists in request (even if empty)
-            if (isset($validatedData['body'])) {
-                $updateData['body'] = $validatedData['body'];
-            } elseif ($request->has('body')) {
-                // Explicitly check if body was sent in request
-                $updateData['body'] = $request->input('body', '');
+            // Ensure body is never null (database constraint)
+            if (!isset($updateData['body']) || $updateData['body'] === null) {
+                $updateData['body'] = $blog->body ?? '';
             }
             
             $blog->update($updateData);
@@ -324,32 +323,45 @@ class BlogController extends Controller
                     }
                 } else {
                     // For non-image elements, use the value directly
+                    // Ensure value is never null (database constraint requires NOT NULL)
                     $elementData['value'] = $e['value'] ?? '';
                 }
 
-                // Only create element if we have valid data
-                if (isset($elementData['value']) || $elementData['element_type'] !== 'image') {
-                    try {
-                        BlogElement::create($elementData);
-                    } catch (\Illuminate\Database\QueryException $dbEx) {
-                        // Catch database errors (like missing columns)
-                        \Log::error('Database error creating blog element: ' . $dbEx->getMessage(), [
-                            'element_data' => $elementData,
-                            'sql_error' => $dbEx->getSql(),
-                            'bindings' => $dbEx->getBindings()
-                        ]);
-                        
-                        // If it's a column not found error, provide helpful message
-                        if (strpos($dbEx->getMessage(), 'Unknown column') !== false || 
-                            strpos($dbEx->getMessage(), 'doesn\'t exist') !== false) {
-                            throw new \Exception(
-                                'Database column missing. Please run the migration to add section_title and order columns to blog_elements table. ' .
-                                'Error: ' . $dbEx->getMessage()
-                            );
-                        }
-                        
-                        throw $dbEx;
+                // Ensure value is set (database requires NOT NULL)
+                if (!isset($elementData['value'])) {
+                    $elementData['value'] = '';
+                }
+
+                // Create element (value is guaranteed to be set above)
+                try {
+                    BlogElement::create($elementData);
+                } catch (\Illuminate\Database\QueryException $dbEx) {
+                    // Catch database errors (like missing columns or NOT NULL violations)
+                    \Log::error('Database error creating blog element: ' . $dbEx->getMessage(), [
+                        'element_data' => $elementData,
+                        'sql_error' => $dbEx->getSql(),
+                        'bindings' => $dbEx->getBindings()
+                    ]);
+                    
+                    // If it's a column not found error, provide helpful message
+                    if (strpos($dbEx->getMessage(), 'Unknown column') !== false || 
+                        strpos($dbEx->getMessage(), 'doesn\'t exist') !== false) {
+                        throw new \Exception(
+                            'Database column missing. Please run the migration to add section_title and order columns to blog_elements table. ' .
+                            'Error: ' . $dbEx->getMessage()
+                        );
                     }
+                    
+                    // If it's a NOT NULL constraint violation
+                    if (strpos($dbEx->getMessage(), 'cannot be null') !== false || 
+                        strpos($dbEx->getMessage(), 'NOT NULL') !== false) {
+                        throw new \Exception(
+                            'Database constraint violation. All required fields must have values. ' .
+                            'Error: ' . $dbEx->getMessage()
+                        );
+                    }
+                    
+                    throw $dbEx;
                 }
             }
             
