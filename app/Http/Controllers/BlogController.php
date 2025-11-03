@@ -33,6 +33,95 @@ class BlogController extends Controller
         }
         return null;
     }
+
+    /**
+     * Format image URL to ensure it's previewable
+     */
+    private function formatImageUrl($url)
+    {
+        if (!$url) return null;
+        
+        // If already a full URL, return as is
+        if (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0) {
+            return $url;
+        }
+        
+        // Ensure it starts with /storage/
+        if (strpos($url, '/storage/') !== 0) {
+            $url = '/storage/' . ltrim($url, '/');
+        }
+        
+        return $url;
+    }
+
+    /**
+     * Format blog response with proper image URLs
+     */
+    private function formatBlogResponse($blog)
+    {
+        $data = $blog->toArray();
+        
+        // Format main blog image
+        if (isset($data['image'])) {
+            $data['image'] = $this->formatImageUrl($data['image']);
+        }
+        
+        // Get elements from the blog model (if loaded)
+        if ($blog->relationLoaded('elements')) {
+            $elements = $blog->elements->map(function($el) {
+                $elArray = $el->toArray();
+                if ($el->element_type === 'image' && isset($elArray['value'])) {
+                    $elArray['value'] = $this->formatImageUrl($elArray['value']);
+                }
+                return $elArray;
+            });
+            $data['elements'] = $elements;
+        }
+        
+        // Get elements by sections
+        if ($blog->relationLoaded('elements')) {
+            $sections = $blog->getElementsBySections();
+            // Format images in sections and convert models to arrays
+            $formattedSections = [];
+            foreach ($sections as $sectionTitle => $elements) {
+                $formattedSections[$sectionTitle] = [];
+                if (is_array($elements)) {
+                    foreach ($elements as $element) {
+                        $elArray = is_object($element) ? $element->toArray() : $element;
+                        if (isset($elArray['element_type']) && $elArray['element_type'] === 'image' && isset($elArray['value'])) {
+                            $elArray['value'] = $this->formatImageUrl($elArray['value']);
+                        }
+                        $formattedSections[$sectionTitle][] = $elArray;
+                    }
+                }
+            }
+            $data['elements_by_sections'] = $formattedSections;
+        }
+        
+        // Also handle if elements are in the array already (backup)
+        if (isset($data['elements']) && is_array($data['elements'])) {
+            foreach ($data['elements'] as &$element) {
+                if (isset($element['element_type']) && $element['element_type'] === 'image' && isset($element['value'])) {
+                    $element['value'] = $this->formatImageUrl($element['value']);
+                }
+            }
+        }
+        
+        // Format images in elements_by_sections if in array
+        if (isset($data['elements_by_sections']) && is_array($data['elements_by_sections'])) {
+            foreach ($data['elements_by_sections'] as $sectionTitle => &$elements) {
+                if (is_array($elements)) {
+                    foreach ($elements as &$element) {
+                        if (isset($element['element_type']) && $element['element_type'] === 'image' && isset($element['value'])) {
+                            $element['value'] = $this->formatImageUrl($element['value']);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return $data;
+    }
     
     public function store(Request $request)
     {
@@ -120,9 +209,7 @@ class BlogController extends Controller
 
             // Load blog with elements for response
             $blog->load('elements');
-            $data = $blog->toArray();
-            $data['elements'] = $blog->elements;
-            $data['elements_by_sections'] = $blog->getElementsBySections();
+            $data = $this->formatBlogResponse($blog);
 
             return response()->json($data, 201);
         } catch (ValidationException $e) {
@@ -137,10 +224,7 @@ class BlogController extends Controller
         $blogs = Blog::with('elements')->get();
         $res = [];
         foreach($blogs as $b){
-           $data = $b->toArray();
-           $data['elements'] = $b->elements;
-           $data['elements_by_sections'] = $b->getElementsBySections();
-           $res[] = $data;
+           $res[] = $this->formatBlogResponse($b);
         }
         return response()->json($res, 200);
     }
@@ -153,9 +237,7 @@ class BlogController extends Controller
             return response()->json(['error' => 'Blog not found'], 404);
         }
         
-        $data = $blog->toArray();
-        $data['elements'] = $blog->elements;
-        $data['elements_by_sections'] = $blog->getElementsBySections();
+        $data = $this->formatBlogResponse($blog);
         
         return response()->json($data, 200);
     }
@@ -368,9 +450,7 @@ class BlogController extends Controller
             // Reload blog with elements
             $blog->load('elements');
             $blog->refresh(); // Ensure we get the latest data
-            $data = $blog->toArray();
-            $data['elements'] = $blog->elements;
-            $data['elements_by_sections'] = $blog->getElementsBySections();
+            $data = $this->formatBlogResponse($blog);
             
             return response()->json(['message' => 'Blog updated successfully', 'blog' => $data], 200);
             

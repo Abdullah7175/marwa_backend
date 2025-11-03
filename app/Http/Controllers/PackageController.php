@@ -16,18 +16,72 @@ class PackageController extends Controller
      */
     private function saveImage($image, $directory)
     {
-        if ($image->isValid()) {
+        if ($image && $image->isValid()) {
             $path = $image->store($directory, 'public');
             $url = Storage::url($path);
+            // Ensure URL starts with /storage/ for proper preview
+            if (strpos($url, '/storage/') !== 0 && strpos($url, 'http') !== 0) {
+                $url = '/storage/' . ltrim($url, '/');
+            }
             return $url;
         }
         return null;
     }
 
+    /**
+     * Format image URLs to ensure they're previewable
+     */
+    private function formatImageUrl($url)
+    {
+        if (!$url) return null;
+        
+        // If already a full URL, return as is
+        if (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0) {
+            return $url;
+        }
+        
+        // Ensure it starts with /storage/
+        if (strpos($url, '/storage/') !== 0) {
+            $url = '/storage/' . ltrim($url, '/');
+        }
+        
+        return $url;
+    }
+
+    /**
+     * Format package response with proper image URLs
+     */
+    private function formatPackageResponse($package)
+    {
+        $data = $package->toArray();
+        
+        // Format all image URLs
+        if (isset($data['package_image'])) {
+            $data['package_image'] = $this->formatImageUrl($data['package_image']);
+        }
+        if (isset($data['hotel_makkah_image'])) {
+            $data['hotel_makkah_image'] = $this->formatImageUrl($data['hotel_makkah_image']);
+        }
+        if (isset($data['hotel_madina_image'])) {
+            $data['hotel_madina_image'] = $this->formatImageUrl($data['hotel_madina_image']);
+        }
+        if (isset($data['trans_image'])) {
+            $data['trans_image'] = $this->formatImageUrl($data['trans_image']);
+        }
+        if (isset($data['visa_image'])) {
+            $data['visa_image'] = $this->formatImageUrl($data['visa_image']);
+        }
+        
+        return $data;
+    }
+
     public function index()
     {
         $packages = Package::with('category')->get();
-        return response()->json($packages, 200);
+        $formatted = $packages->map(function ($package) {
+            return $this->formatPackageResponse($package);
+        });
+        return response()->json($formatted, 200);
     }
 
     public function show($id)
@@ -38,7 +92,7 @@ class PackageController extends Controller
             return response()->json(['error' => 'Package not found'], 404);
         }
         
-        return response()->json($package, 200);
+        return response()->json($this->formatPackageResponse($package), 200);
     }
 
     public function store(Request $request)
@@ -64,6 +118,7 @@ class PackageController extends Controller
             }
             $request->merge($payload);
 
+            // Validate with proper boolean handling - accept boolean, integer (0/1), or string ('0'/'1'/'true'/'false')
             $request->validate([
                 'name' => 'required|string|max:255',
                 'price_single' => 'required|numeric',
@@ -77,33 +132,41 @@ class PackageController extends Controller
                 'hotel_madina_name' => 'nullable|string',
                 'hotel_makkah_detail' => 'nullable|string',
                 'hotel_madina_detail' => 'nullable|string',
-                'hotel_madina_image' => 'nullable', // Update with appropriate validation rules
-                'hotel_makkah_image' => 'nullable', // Update with appropriate validation rules
+                'hotel_madina_image' => 'nullable|file|image',
+                'hotel_makkah_image' => 'nullable|file|image',
                 'trans_title' => 'nullable|string',
                 'trans_detail' => 'nullable|string',
-                'trans_image' => 'nullable', // Update with appropriate validation rules
+                'trans_image' => 'nullable|file|image',
                 'visa_title' => 'nullable|string',
                 'visa_detail' => 'nullable|string',
-                'visa_image' => 'nullable', // Update with appropriate validation rules
+                'visa_image' => 'nullable|file|image',
                 'nights_makkah' => 'required|integer|min:0',
                 'nights_madina' => 'required|integer|min:0',
                 'nights' => 'required|integer|min:0',
-                'is_roundtrip' => 'required|boolean',
-                'ziyarat' => 'required|boolean',
-                'guide' => 'required|boolean',
+                'is_roundtrip' => 'required',
+                'ziyarat' => 'required',
+                'guide' => 'required',
                 'email' => 'required|email',
                 'whatsapp' => 'required|string|max:20',
                 'phone' => 'required|string|max:20',
-                'hotel_makkah_enabled' => 'required|boolean',
-                'hotel_madina_enabled' => 'required|boolean',
-                'visa_enabled' => 'required|boolean',
-                'ticket_enabled' => 'required|boolean',
-                'breakfast_enabled' => 'required|boolean',
-                'dinner_enabled' => 'required|boolean',
+                'hotel_makkah_enabled' => 'required',
+                'hotel_madina_enabled' => 'required',
+                'visa_enabled' => 'required',
+                'ticket_enabled' => 'required',
+                'breakfast_enabled' => 'required',
+                'dinner_enabled' => 'required',
                 'visa_duration' => 'nullable|string',
-                'package_image' => 'nullable',
-                'transport_enabled' => 'required|boolean',
-                'category_id' => 'required|exists:categories,id',
+                'package_image' => 'nullable|file|image',
+                'transport_enabled' => 'required',
+                'category_id' => 'required|integer|exists:categories,id',
+            ], [
+                // Custom error messages
+                'category_id.exists' => 'The selected category does not exist.',
+                'package_image.image' => 'The package image must be an image file.',
+                'hotel_madina_image.image' => 'The hotel Madina image must be an image file.',
+                'hotel_makkah_image.image' => 'The hotel Makkah image must be an image file.',
+                'trans_image.image' => 'The transport image must be an image file.',
+                'visa_image.image' => 'The visa image must be an image file.',
             ]);
             $data = $request->only([
                 'name',
@@ -226,10 +289,26 @@ class PackageController extends Controller
             
 
             $package = Package::create($data);
+            $package->load('category');
     
-            return response()->json(['message' => 'Package created successfully', 'package' => $package], 201);
+            return response()->json([
+                'message' => 'Package created successfully', 
+                'package' => $this->formatPackageResponse($package)
+            ], 201);
         } catch (ValidationException $e) {
-            return response()->json(['errors' => $e->errors()], 422);
+            return response()->json([
+                'errors' => $e->errors(),
+                'message' => 'Validation failed. Please check the errors below.',
+                'received_data' => $request->except(['package_image', 'hotel_madina_image', 'hotel_makkah_image', 'trans_image', 'visa_image']) // Exclude files for readability
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Package creation error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'error' => 'Failed to create package',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
     public function update(Request $request)
@@ -423,8 +502,12 @@ class PackageController extends Controller
             $package = Package::find($request->input('id'));
             $package->update($data);
             $package->save();
+            $package->load('category');
     
-            return response()->json(['message' => 'Package Updated successfully', 'package' => $package], 200);
+            return response()->json([
+                'message' => 'Package Updated successfully', 
+                'package' => $this->formatPackageResponse($package)
+            ], 200);
         } catch (ValidationException $e) {
             return response()->json(['errors' => $e->errors()], 422);
         }

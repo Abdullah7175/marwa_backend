@@ -13,17 +13,58 @@ class ReviewController extends Controller
 {
     public function index()
     {
-        $reviews = Review::all();
+        $reviews = Review::all()->map(function ($review) {
+            return $this->formatReviewResponse($review);
+        });
         return response()->json($reviews);
     }
     private function save($image, $directory)
     {
-        if ($image->isValid()) {
+        if ($image && $image->isValid()) {
             $path = $image->store($directory, 'public');
             $url = Storage::url($path);
+            // Ensure URL starts with /storage/ for proper preview
+            if (strpos($url, '/storage/') !== 0 && strpos($url, 'http') !== 0) {
+                $url = '/storage/' . ltrim($url, '/');
+            }
             return $url;
         }
         return null;
+    }
+
+    /**
+     * Format video/image URL to ensure it's previewable
+     */
+    private function formatMediaUrl($url)
+    {
+        if (!$url) return null;
+        
+        // If already a full URL, return as is
+        if (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0) {
+            return $url;
+        }
+        
+        // Ensure it starts with /storage/
+        if (strpos($url, '/storage/') !== 0) {
+            $url = '/storage/' . ltrim($url, '/');
+        }
+        
+        return $url;
+    }
+
+    /**
+     * Format review response with proper video URLs
+     */
+    private function formatReviewResponse($review)
+    {
+        $data = $review->toArray();
+        
+        // Format video URL
+        if (isset($data['video_url'])) {
+            $data['video_url'] = $this->formatMediaUrl($data['video_url']);
+        }
+        
+        return $data;
     }
     public function store(Request $request)
     {
@@ -51,7 +92,7 @@ class ReviewController extends Controller
 
             $review = Review::create($data);
 
-            return response()->json($review, 201)->header('Content-Type', 'application/json');
+            return response()->json($this->formatReviewResponse($review), 201)->header('Content-Type', 'application/json');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'error' => 'Validation failed',
@@ -68,7 +109,7 @@ class ReviewController extends Controller
     public function show($id)
     {
         $review = Review::findOrFail($id);
-        return response()->json($review);
+        return response()->json($this->formatReviewResponse($review));
     }
 
     public function update(Request $request, $id)
@@ -76,13 +117,27 @@ class ReviewController extends Controller
         $request->validate([
             'user_name' => 'sometimes|required|string|max:255',
             'detail' => 'sometimes|required|string',
+            'video' => 'nullable|file|mimes:mp4,mov,avi|max:10240',
             'video_url' => 'nullable|string',
         ]);
 
         $review = Review::findOrFail($id);
-        $review->update($request->all());
+        $data = $request->only(['user_name', 'detail', 'video_url']);
 
-        return response()->json($review);
+        // Handle video file upload if provided
+        if ($request->hasFile('video')) {
+            $videoFile = $request->file('video');
+            if ($videoFile && $videoFile->isValid()) {
+                $path = $this->save($videoFile, 'videos');
+                if ($path) {
+                    $data['video_url'] = $path;
+                }
+            }
+        }
+
+        $review->update($data);
+
+        return response()->json($this->formatReviewResponse($review));
     }
 
     public function destroy($id)

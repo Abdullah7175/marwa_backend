@@ -18,21 +18,60 @@ class CustomPackageController extends Controller
      */
     private function saveImage($image, $directory)
     {
-        if ($image->isValid()) {
+        if ($image && $image->isValid()) {
             $path = $image->store($directory, 'public');
             $url = Storage::url($path);
+            // Ensure URL starts with /storage/ for proper preview
+            if (strpos($url, '/storage/') !== 0 && strpos($url, 'http') !== 0) {
+                $url = '/storage/' . ltrim($url, '/');
+            }
             return $url;
         }
         return null;
+    }
+
+    /**
+     * Format image URL to ensure it's previewable
+     */
+    private function formatImageUrl($url)
+    {
+        if (!$url) return null;
+        
+        // If already a full URL, return as is
+        if (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0) {
+            return $url;
+        }
+        
+        // Ensure it starts with /storage/
+        if (strpos($url, '/storage/') !== 0) {
+            $url = '/storage/' . ltrim($url, '/');
+        }
+        
+        return $url;
+    }
+
+    /**
+     * Format custom package response with proper image URLs
+     */
+    private function formatCustomPackageResponse($package)
+    {
+        $data = $package->toArray();
+        
+        // Format signature image URL
+        if (isset($data['signature_image_url'])) {
+            $data['signature_image_url'] = $this->formatImageUrl($data['signature_image_url']);
+        }
+        
+        return $data;
     }
 
     public function index()
     {
         $packages = CustomPackage::with(['hotelMakkah', 'hotelMadina'])->get();
         
-        // Append hotel names to each package
+        // Append hotel names and format image URLs
         return $packages->map(function ($package) {
-            $data = $package->toArray();
+            $data = $this->formatCustomPackageResponse($package);
             $data['hotel_makkah_name'] = $package->hotelMakkah ? $package->hotelMakkah->name : null;
             $data['hotel_madina_name'] = $package->hotelMadina ? $package->hotelMadina->name : null;
             return $data;
@@ -43,7 +82,7 @@ class CustomPackageController extends Controller
     {
         $package = CustomPackage::with(['hotelMakkah', 'hotelMadina'])->findOrFail($id);
         
-        $data = $package->toArray();
+        $data = $this->formatCustomPackageResponse($package);
         $data['hotel_makkah_name'] = $package->hotelMakkah ? $package->hotelMakkah->name : null;
         $data['hotel_madina_name'] = $package->hotelMadina ? $package->hotelMadina->name : null;
         
@@ -126,7 +165,7 @@ class CustomPackageController extends Controller
             // Load relationships
             $customPackage->load(['hotelMakkah', 'hotelMadina']);
             
-            $data = $customPackage->toArray();
+            $data = $this->formatCustomPackageResponse($customPackage);
             $data['hotel_makkah_name'] = $customPackage->hotelMakkah ? $customPackage->hotelMakkah->name : null;
             $data['hotel_madina_name'] = $customPackage->hotelMadina ? $customPackage->hotelMadina->name : null;
     
@@ -215,7 +254,7 @@ class CustomPackageController extends Controller
             // Reload with relationships
             $customPackage->load(['hotelMakkah', 'hotelMadina']);
             
-            $data = $customPackage->toArray();
+            $data = $this->formatCustomPackageResponse($customPackage);
             $data['hotel_makkah_name'] = $customPackage->hotelMakkah ? $customPackage->hotelMakkah->name : null;
             $data['hotel_madina_name'] = $customPackage->hotelMadina ? $customPackage->hotelMadina->name : null;
     

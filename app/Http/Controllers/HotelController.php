@@ -16,12 +16,36 @@ class HotelController extends Controller
      */
     private function saveImage($image, $directory)
     {
-        if ($image->isValid()) {
+        if ($image && $image->isValid()) {
             $path = $image->store($directory, 'public');
             $url = Storage::url($path);
+            // Ensure URL starts with /storage/ for proper preview
+            if (strpos($url, '/storage/') !== 0 && strpos($url, 'http') !== 0) {
+                $url = '/storage/' . ltrim($url, '/');
+            }
             return $url;
         }
         return null;
+    }
+
+    /**
+     * Format image URL to ensure it's previewable
+     */
+    private function formatImageUrl($url)
+    {
+        if (!$url) return null;
+        
+        // If already a full URL, return as is
+        if (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0) {
+            return $url;
+        }
+        
+        // Ensure it starts with /storage/
+        if (strpos($url, '/storage/') !== 0) {
+            $url = '/storage/' . ltrim($url, '/');
+        }
+        
+        return $url;
     }
 
     public function index()
@@ -59,7 +83,7 @@ class HotelController extends Controller
             'charges' => $hotel->charges ?? '0',
             'charges_numeric' => $chargesNumeric,
             'rating' => $hotel->rating ?? 0,
-            'image' => $hotel->image ?? '',
+            'image' => $this->formatImageUrl($hotel->image ?? ''),
             'description' => $hotel->description ?? '',
             'currency' => $hotel->currency ?? 'USD',
             'phone' => $hotel->phone ?? '',
@@ -121,9 +145,12 @@ class HotelController extends Controller
             }
             
 
-            $package = Hotel::create($data);
+            $hotel = Hotel::create($data);
     
-            return response()->json(['message' => 'Package created successfully', 'package' => $package], 201);
+            return response()->json([
+                'message' => 'Hotel created successfully', 
+                'hotel' => $this->formatHotelResponse($hotel)
+            ], 201);
         } catch (ValidationException $e) {
             return response()->json(['errors' => $e->errors()], 422);
         }
@@ -181,11 +208,14 @@ class HotelController extends Controller
             
 
 
-            $package = Hotel::find($request->input('id'));
-            $package->update($data);
-            $package->save();
+            $hotel = Hotel::find($request->input('id'));
+            $hotel->update($data);
+            $hotel->save();
     
-            return response()->json(['message' => 'Hotel Updated successfully', 'hotel' => $package], 200);
+            return response()->json([
+                'message' => 'Hotel Updated successfully', 
+                'hotel' => $this->formatHotelResponse($hotel)
+            ], 200);
         } catch (ValidationException $e) {
             return response()->json(['errors' => $e->errors()], 422);
         }
