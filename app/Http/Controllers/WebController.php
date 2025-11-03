@@ -18,12 +18,15 @@ class WebController extends Controller
 
     public function getBlogs(){
 
-        $blogs = Blog::all();
+        $blogs = Blog::with('elements')->get();
         $res = [];
         foreach($blogs as $b){
            $data = $b->toArray();
-           $elements = BlogElement::where('blog_id',$b['id'])->get();
-           $res[] = array_merge($data,['elements'=>$elements]);
+           // Get elements ordered by section and order
+           $data['elements'] = $b->elements;
+           // Also include elements grouped by sections for easier frontend rendering
+           $data['elements_by_sections'] = $b->getElementsBySections();
+           $res[] = $data;
         }
         return response()->json($res,200);
     }

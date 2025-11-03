@@ -75,7 +75,10 @@ class Blog extends Model
      */
     public function elements()
     {
-        return $this->hasMany(BlogElement::class)->orderBy('section_title')->orderBy('order');
+        return $this->hasMany(BlogElement::class)
+            ->orderByRaw('CASE WHEN section_title IS NULL THEN 1 ELSE 0 END') // NULLs last
+            ->orderBy('section_title')
+            ->orderBy('order');
     }
 
     /**
@@ -92,6 +95,13 @@ class Blog extends Model
                 $grouped[$section] = [];
             }
             $grouped[$section][] = $element;
+        }
+        
+        // Sort elements within each section by order
+        foreach ($grouped as $section => $sectionElements) {
+            usort($grouped[$section], function($a, $b) {
+                return ($a->order ?? 0) - ($b->order ?? 0);
+            });
         }
         
         return $grouped;

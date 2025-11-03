@@ -14,7 +14,7 @@ class BlogController extends Controller
 
     private function saveImage($image, $directory)
     {
-        if ($image->isValid()) {
+        if ($image && $image->isValid()) {
             $path = $image->store($directory, 'public');
             $url = Storage::url($path);
             return $url;
@@ -75,7 +75,7 @@ class BlogController extends Controller
                     'element_type' => $e['element_type'],
                     'blog_id' => $blog_id,
                     'section_title' => $e['section_title'] ?? null,
-                    'order' => $e['order'] ?? $index,
+                    'order' => isset($e['order']) ? (int)$e['order'] : $index,
                 ];
 
                 // Handle image elements
@@ -83,8 +83,14 @@ class BlogController extends Controller
                     $fieldName = $e['value'] ?? null;
                     if ($fieldName && $request->hasFile($fieldName)) {
                         $elemImagePath = $this->saveImage($request->file($fieldName), 'blogs_images');
-                        $elementData['value'] = $elemImagePath;
-                    } elseif (isset($e['value']) && filter_var($e['value'], FILTER_VALIDATE_URL)) {
+                        if ($elemImagePath) {
+                            $elementData['value'] = $elemImagePath;
+                        } else {
+                            throw ValidationException::withMessages([
+                                "elements.$index" => ["Failed to upload image for field '$fieldName'."],
+                            ]);
+                        }
+                    } elseif (isset($e['value']) && (filter_var($e['value'], FILTER_VALIDATE_URL) || strpos($e['value'], '/storage/') === 0)) {
                         // If it's already a URL (existing image), use it
                         $elementData['value'] = $e['value'];
                     } else {
@@ -145,7 +151,7 @@ class BlogController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            // Validation
+            // Validation - make body explicitly nullable and allow empty strings
             $validatedData = $request->validate([
                 'title' => 'required|string|max:255',
                 'body' => 'nullable|string',
@@ -161,15 +167,27 @@ class BlogController extends Controller
             // Handle main image update
             $imagePath = $blog->image;
             if($request->hasFile('image')){
-                $imagePath = $this->saveImage($request->file('image'), 'blogs_images');
+                $newImagePath = $this->saveImage($request->file('image'), 'blogs_images');
+                if ($newImagePath) {
+                    $imagePath = $newImagePath;
+                }
             }
             
-            // Update blog post
-            $blog->update([
+            // Update blog post - explicitly handle body field
+            $updateData = [
                 'title' => $validatedData['title'],
-                'body' => $validatedData['body'] ?? $blog->body,
                 'image' => $imagePath
-            ]);
+            ];
+            
+            // Handle body field - check if it exists in request (even if empty)
+            if (isset($validatedData['body'])) {
+                $updateData['body'] = $validatedData['body'];
+            } elseif ($request->has('body')) {
+                // Explicitly check if body was sent in request
+                $updateData['body'] = $request->input('body', '');
+            }
+            
+            $blog->update($updateData);
             
             // Delete existing elements
             BlogElement::where('blog_id', $id)->delete();
@@ -197,6 +215,9 @@ class BlogController extends Controller
                 }
             }
 
+            // Get all uploaded files to check against
+            $allFiles = $request->allFiles();
+
             // Create new elements with sections and ordering
             foreach ($normalizedElements as $index => $e) {
                 if (!isset($e['element_type'])) {
@@ -208,23 +229,41 @@ class BlogController extends Controller
                 $elementData = [
                     'element_type' => $e['element_type'],
                     'blog_id' => $id,
-                    'section_title' => $e['section_title'] ?? null,
-                    'order' => $e['order'] ?? $index,
+                    'section_title' => isset($e['section_title']) && $e['section_title'] !== '' ? $e['section_title'] : null,
+                    'order' => isset($e['order']) ? (int)$e['order'] : $index,
                 ];
 
                 // Handle image elements
                 if ($e['element_type'] === 'image') {
                     $fieldName = $e['value'] ?? null;
-                    if ($fieldName && $request->hasFile($fieldName)) {
-                        // New image uploaded
+                    $imageSaved = false;
+                    
+                    // Check if file was uploaded with this field name
+                    if ($fieldName && isset($allFiles[$fieldName])) {
                         $elemImagePath = $this->saveImage($request->file($fieldName), 'blogs_images');
-                        $elementData['value'] = $elemImagePath;
-                    } elseif (isset($e['value']) && (filter_var($e['value'], FILTER_VALIDATE_URL) || strpos($e['value'], '/storage/') === 0)) {
-                        // Existing image URL, keep it
-                        $elementData['value'] = $e['value'];
-                    } else {
+                        if ($elemImagePath) {
+                            $elementData['value'] = $elemImagePath;
+                            $imageSaved = true;
+                        }
+                    }
+                    
+                    // If no new file uploaded, check if it's an existing image URL
+                    if (!$imageSaved) {
+                        if (isset($e['value']) && !empty($e['value'])) {
+                            // Check if it's a valid URL or storage path
+                            if (filter_var($e['value'], FILTER_VALIDATE_URL) || 
+                                strpos($e['value'], '/storage/') === 0 ||
+                                strpos($e['value'], 'http') === 0) {
+                                // Existing image URL, keep it
+                                $elementData['value'] = $e['value'];
+                                $imageSaved = true;
+                            }
+                        }
+                    }
+                    
+                    if (!$imageSaved) {
                         throw ValidationException::withMessages([
-                            "elements.$index" => ["Image field '$fieldName' not found in request or invalid value."],
+                            "elements.$index" => ["Image field '$fieldName' not found in request, upload failed, or invalid value."],
                         ]);
                     }
                 } else {
@@ -237,6 +276,7 @@ class BlogController extends Controller
             
             // Reload blog with elements
             $blog->load('elements');
+            $blog->refresh(); // Ensure we get the latest data
             $data = $blog->toArray();
             $data['elements'] = $blog->elements;
             $data['elements_by_sections'] = $blog->getElementsBySections();
