@@ -230,6 +230,13 @@ class HotelController extends Controller
     public function update(Request $request, $id)
     {
         try {
+            \Log::info("Hotel update request received", [
+                'hotel_id' => $id,
+                'all_inputs' => array_keys($request->all()),
+                'has_files' => count($request->allFiles()) > 0,
+                'content_type' => $request->header('Content-Type')
+            ]);
+
             // Normalize incoming scalar types from multipart form-data
             $booleanFields = ['breakfast_enabled', 'dinner_enabled'];
             
@@ -242,7 +249,7 @@ class HotelController extends Controller
             $request->merge($payload);
 
             // Match database schema: charges is varchar(255), not numeric
-            $request->validate([
+            $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'location' => 'required|string|max:255',
                 'charges' => 'required|string|max:255',
@@ -259,47 +266,49 @@ class HotelController extends Controller
                 'image.image' => 'The image must be an image file.',
             ]);
             
-            $data = $request->only([
-                'name',
-                'location',
-                'charges',
-                'rating',
-                'description',
-                'currency',
-                'email',
-                'phone',
-                'breakfast_enabled',
-                'dinner_enabled',
-                'status'
-            ]);
-
-
-
-
-
-
-
-          
-            if(isset($_FILES['image'])==true){
-                $image = $_FILES['image'];
-                if(!$image){
-                    return response()->json(['error'=>'please put package_image ok']);
-                }
-                $imagePath = $this->saveImage($request->file('image'), 'hotel_images');
-
-                $data['image'] = $imagePath;
-                
-
-            }else{
-               // return response()->json(['error'=>'please put package_image']);
-            }
-            
-
-
+            // Find the hotel first
             $hotel = Hotel::find($id);
             if (!$hotel) {
                 return response()->json(['error' => 'Hotel not found'], 404);
             }
+
+            // Prepare data - start with required fields
+            $data = [];
+            
+            // Only update fields that are present in the request
+            $fields = ['name', 'location', 'charges', 'rating', 'description', 'currency', 'email', 'phone', 'status'];
+            foreach ($fields as $field) {
+                if ($request->has($field)) {
+                    $value = $request->input($field);
+                    if ($value !== null && $value !== '') {
+                        $data[$field] = $value;
+                    }
+                }
+            }
+            
+            // Handle boolean fields
+            if ($request->has('breakfast_enabled')) {
+                $data['breakfast_enabled'] = in_array((string)$request->input('breakfast_enabled'), ['1','true','on'], true) ? 1 : 0;
+            }
+            if ($request->has('dinner_enabled')) {
+                $data['dinner_enabled'] = in_array((string)$request->input('dinner_enabled'), ['1','true','on'], true) ? 1 : 0;
+            }
+
+            // Handle image upload
+            if ($request->hasFile('image')) {
+                $imagePath = $this->saveImage($request->file('image'), 'hotel_images');
+                if ($imagePath) {
+                    $data['image'] = $imagePath;
+                } else {
+                    return response()->json([
+                        'error' => 'Failed to save image',
+                        'message' => 'The uploaded image could not be saved.'
+                    ], 422);
+                }
+            }
+
+            \Log::info('Updating hotel with data', ['hotel_id' => $id, 'data_keys' => array_keys($data)]);
+            
             $hotel->update($data);
             $hotel->save();
     
@@ -308,12 +317,19 @@ class HotelController extends Controller
                 'hotel' => $this->formatHotelResponse($hotel)
             ], 200);
         } catch (ValidationException $e) {
+            \Log::error('Hotel update validation failed', [
+                'hotel_id' => $id,
+                'errors' => $e->errors(),
+                'received_data' => $request->except(['image'])
+            ]);
             return response()->json([
                 'errors' => $e->errors(),
-                'message' => 'Validation failed. Please check the errors below.'
+                'message' => 'Validation failed. Please check the errors below.',
+                'received_fields' => array_keys($request->all())
             ], 422);
         } catch (\Exception $e) {
             \Log::error('Hotel update error: ' . $e->getMessage(), [
+                'hotel_id' => $id,
                 'trace' => $e->getTraceAsString(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine()
