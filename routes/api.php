@@ -94,6 +94,25 @@ Route::prefix('hotels')->group(function () {
     Route::delete('/{id}', [HotelController::class, 'destroy']);
 });
 
+// Handle legacy image paths like /api/images/blog/file.jpg or /api/images/hotel/file.jpg
+Route::get('/images/{type}/{filename}', function ($type, $filename) {
+    // Map old image paths to new storage paths
+    $directoryMap = [
+        'blog' => 'blogs_images',
+        'hotel' => 'hotel_images',
+        'package' => 'package_images',
+    ];
+    
+    $directory = $directoryMap[$type] ?? $type;
+    $filePath = storage_path("app/public/{$directory}/{$filename}");
+    
+    if (file_exists($filePath)) {
+        return response()->file($filePath);
+    }
+    
+    // Return a placeholder or 404
+    return response()->json(['error' => 'Image not found'], 404);
+});
 
 Route::get('/web/packs',[WebController::class,'getPackages']);
 

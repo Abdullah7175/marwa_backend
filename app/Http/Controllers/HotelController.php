@@ -227,7 +227,7 @@ class HotelController extends Controller
             ], 500);
         }
     }
-    public function update(Request $request)
+    public function update(Request $request, $id)
     {
         try {
             // Normalize incoming scalar types from multipart form-data
@@ -243,7 +243,6 @@ class HotelController extends Controller
 
             // Match database schema: charges is varchar(255), not numeric
             $request->validate([
-                'id' => 'required',
                 'name' => 'required|string|max:255',
                 'location' => 'required|string|max:255',
                 'charges' => 'required|string|max:255',
@@ -297,7 +296,10 @@ class HotelController extends Controller
             
 
 
-            $hotel = Hotel::find($request->input('id'));
+            $hotel = Hotel::find($id);
+            if (!$hotel) {
+                return response()->json(['error' => 'Hotel not found'], 404);
+            }
             $hotel->update($data);
             $hotel->save();
     
