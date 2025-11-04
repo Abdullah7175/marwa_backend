@@ -49,6 +49,11 @@ Route::prefix('reviews')->group(function () {
     Route::get('/', [ReviewController::class, 'index']);
     Route::get('/{id}', [ReviewController::class, 'show']);
     Route::put('/{id}', [ReviewController::class, 'update']);
+    Route::post('/{id}', [ReviewController::class, 'update']); // Also support POST for multipart/form-data
+    
+    // Use proper DELETE method
+    Route::delete('/{id}', [ReviewController::class, 'destroy']);
+    // Keep legacy GET route for backwards compatibility
     Route::get('/delete/{id}', [ReviewController::class, 'destroy']);
 });
 

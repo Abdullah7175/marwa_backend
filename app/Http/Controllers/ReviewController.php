@@ -71,11 +71,15 @@ class ReviewController extends Controller
         // Force JSON response and prevent redirects
         $request->headers->set('Accept', 'application/json');
         
+        // Increase timeout for large file uploads
+        set_time_limit(600); // 10 minutes
+        
         try {
             $request->validate([
                 'user_name' => 'required|string|max:255',
                 'detail' => 'required|string',
-                'video' => 'nullable|file|mimes:mp4,mov,avi|max:10240', // Made optional since video might not always be uploaded
+                // Accept all video formats and allow up to 1GB files
+                'video' => 'nullable|file|mimes:mp4,mov,avi,wmv,flv,mkv,webm,m4v,3gp,mpeg,mpg,ogv,ts,m2ts,mts|max:1048576',
             ]);
 
             $data = $request->only(['user_name', 'detail']);
@@ -114,10 +118,14 @@ class ReviewController extends Controller
 
     public function update(Request $request, $id)
     {
+        // Increase timeout for large file uploads
+        set_time_limit(600); // 10 minutes
+        
         $request->validate([
             'user_name' => 'sometimes|required|string|max:255',
             'detail' => 'sometimes|required|string',
-            'video' => 'nullable|file|mimes:mp4,mov,avi|max:10240',
+            // Accept all video formats and allow up to 1GB files
+            'video' => 'nullable|file|mimes:mp4,mov,avi,wmv,flv,mkv,webm,m4v,3gp,mpeg,mpg,ogv,ts,m2ts,mts|max:1048576',
             'video_url' => 'nullable|string',
         ]);
 
@@ -126,6 +134,14 @@ class ReviewController extends Controller
 
         // Handle video file upload if provided
         if ($request->hasFile('video')) {
+            // Delete old video if exists
+            if ($review->video_url) {
+                $oldPath = str_replace('/storage/', '', $review->video_url);
+                if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
+            
             $videoFile = $request->file('video');
             if ($videoFile && $videoFile->isValid()) {
                 $path = $this->save($videoFile, 'videos');
@@ -143,8 +159,21 @@ class ReviewController extends Controller
     public function destroy($id)
     {
         $review = Review::findOrFail($id);
+        
+        // Delete the video file from storage if it exists
+        if ($review->video_url) {
+            // Remove /storage/ prefix to get the actual storage path
+            $videoPath = str_replace('/storage/', '', $review->video_url);
+            
+            // Check if file exists and delete it
+            if (Storage::disk('public')->exists($videoPath)) {
+                Storage::disk('public')->delete($videoPath);
+            }
+        }
+        
+        // Delete the database record
         $review->delete();
 
-        return response()->json(null, 204);
+        return response()->json(['message' => 'Review and video deleted successfully'], 200);
     }
 }
