@@ -82,6 +82,7 @@ Route::prefix('packages')->group(function () {
     Route::get('/', [PackageController::class, 'index']);
     Route::get('/{id}', [PackageController::class, 'show']);
     Route::put('/{id}', [PackageController::class, 'update']);
+    Route::post('/{id}', [PackageController::class, 'update']); // Also support POST for multipart/form-data
     Route::delete('/{id}', [PackageController::class, 'destroy']);
 });
 
@@ -91,6 +92,7 @@ Route::prefix('hotels')->group(function () {
     Route::get('/', [HotelController::class, 'index']);
     Route::get('/{id}', [HotelController::class, 'show']);
     Route::put('/{id}', [HotelController::class, 'update']);
+    Route::post('/{id}', [HotelController::class, 'update']); // Also support POST for multipart/form-data
     Route::delete('/{id}', [HotelController::class, 'destroy']);
 });
 

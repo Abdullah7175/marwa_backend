@@ -98,10 +98,11 @@ After deployment, test these:
 |---------|--------|-------|
 | Blog Create | ✅ WORKING | section_title supports long text |
 | Blog Update | ✅ WORKING | Uses POST method |
-| Blog Delete | ✅ WORKING | Now uses DELETE method |
+| Blog Delete | ✅ WORKING | Uses DELETE method |
 | Hotel Create | ✅ WORKING | All columns exist |
 | Hotel Update | ✅ FIXED | Uses POST + _method=PUT |
 | Hotel Delete | ✅ WORKING | Uses DELETE method |
+| Package Update | ✅ FIXED | Uses POST + _method=PUT (was 405 error) |
 | Image Routes | ✅ WORKING | New uploads work, old dummy data shows 404 |
 
 **All critical functionality is now working!** 🎉
