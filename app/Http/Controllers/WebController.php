@@ -57,12 +57,32 @@ class WebController extends Controller
            // Force JSON response to prevent redirects
            $request->headers->set('Accept', 'application/json');
            
-           // Validation rules
+           // Validation rules - package fields are all optional
            $rules = [
                'name' => 'required|string|max:255',
                'email' => 'required|email|max:255',
                'phone' => 'required|string|max:255',
                'message' => 'required|string',
+               // Optional package details (only sent from package detail page)
+               'package_name' => 'nullable|string|max:255',
+               'price_double' => 'nullable|string|max:255',
+               'price_triple' => 'nullable|string|max:255',
+               'price_quad' => 'nullable|string|max:255',
+               'currency' => 'nullable|string|max:255',
+               'nights_makkah' => 'nullable|string|max:255',
+               'nights_madina' => 'nullable|string|max:255',
+               'total_nights' => 'nullable|string|max:255',
+               'hotel_makkah_name' => 'nullable|string|max:255',
+               'hotel_madina_name' => 'nullable|string|max:255',
+               'transportation_title' => 'nullable|string|max:255',
+               'visa_title' => 'nullable|string|max:255',
+               'breakfast_included' => 'nullable|boolean',
+               'dinner_included' => 'nullable|boolean',
+               'visa_included' => 'nullable|boolean',
+               'ticket_included' => 'nullable|boolean',
+               'roundtrip' => 'nullable|boolean',
+               'ziyarat_included' => 'nullable|boolean',
+               'guide_included' => 'nullable|boolean',
            ];
 
            // Validate the request data
@@ -177,6 +197,7 @@ class WebController extends Controller
 
    /**
     * Build and send signed webhook to external portal.
+    * Now includes package details if inquiry came from package detail page.
     */
    private function postInquiryToWebhook(Inquiry $inquiry, bool $returnResponse = false)
    {
@@ -186,6 +207,7 @@ class WebController extends Controller
        }
        $secret = env('INQUIRY_WEBHOOK_SECRET', '');
 
+       // Base inquiry data
        $payload = [
            'id' => $inquiry->id,
            'name' => $inquiry->name,
@@ -194,6 +216,41 @@ class WebController extends Controller
            'message' => $inquiry->message,
            'created_at' => $inquiry->created_at,
        ];
+
+       // Add package details if this inquiry came from package detail page
+       if ($inquiry->package_name) {
+           $payload['package_details'] = [
+               'package_name' => $inquiry->package_name,
+               'pricing' => [
+                   'double' => $inquiry->price_double,
+                   'triple' => $inquiry->price_triple,
+                   'quad' => $inquiry->price_quad,
+                   'currency' => $inquiry->currency ?? 'USD',
+               ],
+               'duration' => [
+                   'nights_makkah' => $inquiry->nights_makkah,
+                   'nights_madina' => $inquiry->nights_madina,
+                   'total_nights' => $inquiry->total_nights,
+               ],
+               'hotels' => [
+                   'makkah' => $inquiry->hotel_makkah_name,
+                   'madina' => $inquiry->hotel_madina_name,
+               ],
+               'services' => [
+                   'transportation' => $inquiry->transportation_title,
+                   'visa' => $inquiry->visa_title,
+               ],
+               'inclusions' => [
+                   'breakfast' => (bool)$inquiry->breakfast_included,
+                   'dinner' => (bool)$inquiry->dinner_included,
+                   'visa' => (bool)$inquiry->visa_included,
+                   'ticket' => (bool)$inquiry->ticket_included,
+                   'roundtrip' => (bool)$inquiry->roundtrip,
+                   'ziyarat' => (bool)$inquiry->ziyarat_included,
+                   'guide' => (bool)$inquiry->guide_included,
+               ],
+           ];
+       }
 
        $timestamp = (string) time();
        $body = json_encode($payload);

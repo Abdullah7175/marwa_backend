@@ -181,3 +181,42 @@ After deployment, test these:
 
 The only errors you'll see are 404s for old dummy images, which is expected and harmless.
 
+---
+
+## 🆕 Package Inquiry Feature - November 4, 2025
+
+### New Feature Added:
+
+**Package Details Page Enhancement:**
+- ✅ Package image now smaller (50% width instead of full width)
+- ✅ Inquiry form added parallel to image
+- ✅ Responsive design (stacks on mobile)
+- ✅ New component: `PackageInquiryForm.tsx`
+
+**Inquiry API Enhancement:**
+- ✅ 19 new optional fields for package details
+- ✅ Fully backward compatible (existing inquiries unchanged)
+- ✅ Enhanced webhook payload with `package_details` object
+
+**What Booking Portal Receives:**
+- Customer info (name, email, phone, message) ← Same as before
+- **NEW:** package_details object with:
+  - Package name
+  - Pricing (double, triple, quad, currency)
+  - Duration (nights in Makkah, Madinah, total)
+  - Hotel names (Makkah, Madinah)
+  - Services (transportation, visa)
+  - Inclusions (breakfast, dinner, visa, ticket, etc.)
+
+**Files Modified:**
+- Backend: `Inquiry.php`, `WebController.php` + migration
+- Frontend: `package_detail/page.tsx`, `PackageInquiryForm.tsx` (new)
+
+**Documentation for Booking Portal:**
+- 📄 `BOOKING_PORTAL_API_DOCUMENTATION.md` - Complete API docs (24KB)
+- 📄 `PACKAGE_INQUIRY_DEPLOYMENT_GUIDE.md` - Deployment guide
+- 📄 `PACKAGE_INQUIRY_FEATURE_SUMMARY.md` - Feature summary
+- 📄 `PACKAGE_INQUIRY_QUICK_START.txt` - Quick reference
+
+**Status:** ✅ Code complete, ready to deploy
+

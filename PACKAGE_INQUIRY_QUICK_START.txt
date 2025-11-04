@@ -1,0 +1,231 @@
+================================================================================
+              PACKAGE INQUIRY FEATURE - QUICK START GUIDE
+================================================================================
+
+CLIENT REQUEST:
+  ✓ Make package image smaller
+  ✓ Add inquiry form on package details page
+  ✓ Send package details to booking portal
+
+STATUS: ✅ COMPLETED
+
+================================================================================
+                          WHAT WAS CHANGED
+================================================================================
+
+FRONTEND:
+  ✓ Package details page: Image now 50% width (was 100%)
+  ✓ Inquiry form added parallel to image
+  ✓ Responsive design (stacks on mobile)
+  ✓ New component: PackageInquiryForm.tsx
+
+BACKEND:
+  ✓ Database: 19 new columns added to inquiries table (all optional)
+  ✓ API: Accepts package details (backward compatible)
+  ✓ Webhook: Sends package_details object to booking portal
+
+DOCUMENTATION:
+  ✓ BOOKING_PORTAL_API_DOCUMENTATION.md (for booking portal devs)
+  ✓ PACKAGE_INQUIRY_DEPLOYMENT_GUIDE.md (for deployment)
+  ✓ SQL migration script ready
+
+================================================================================
+                          DEPLOYMENT (5 STEPS)
+================================================================================
+
+1. BACKUP DATABASE:
+   mysqldump -u root -p marwah_travels > backup_$(date +%Y%m%d).sql
+
+2. RUN MIGRATION:
+   mysql -u root -p marwah_travels < add_package_details_to_inquiries.sql
+
+3. DEPLOY BACKEND:
+   cd /var/www/marwah-travels
+   git pull
+   php artisan config:clear && php artisan cache:clear && php artisan route:clear
+   sudo kill $(sudo lsof -t -i:8000)
+   sudo -u www-data nohup php artisan serve --host=0.0.0.0 --port=8000 > /dev/null 2>&1 &
+
+4. DEPLOY FRONTEND:
+   cd /var/www/marwah_frontend
+   git pull
+   npm run build
+   pm2 restart all
+
+5. RESTART NGINX:
+   sudo systemctl restart nginx
+
+DONE! ✅
+
+================================================================================
+                          TESTING (3 TESTS)
+================================================================================
+
+TEST 1: Visual Check
+  → Visit: https://www.mtumrah.com/pages/package_detail
+  → Verify: Image is smaller (left side)
+  → Verify: Inquiry form appears (right side)
+  → Verify: Mobile view stacks vertically
+
+TEST 2: General Inquiry (Home Page)
+  → Visit: https://www.mtumrah.com/
+  → Submit inquiry from home page form
+  → Verify: Works as before (no package details sent)
+
+TEST 3: Package Inquiry (Package Details Page)
+  → Visit: https://www.mtumrah.com/pages/packages
+  → Click any package
+  → Fill inquiry form on package details page
+  → Verify: Form submits successfully
+  → Check database: package_name should be filled
+  → Check webhook: Should include package_details object
+
+================================================================================
+                    WEBHOOK PAYLOAD EXAMPLES
+================================================================================
+
+GENERAL INQUIRY (from home page):
+{
+  "id": 123,
+  "name": "John Doe",
+  "email": "john@example.com",
+  "phone": "+1234567890",
+  "message": "General inquiry",
+  "created_at": "2025-11-04T..."
+}
+↑ No package_details - works as before ✅
+
+PACKAGE INQUIRY (from package details page):
+{
+  "id": 124,
+  "name": "Jane Smith",
+  "email": "jane@example.com",
+  "phone": "+1987654321",
+  "message": "Want to book this package",
+  "created_at": "2025-11-04T...",
+  "package_details": {
+    "package_name": "Premium Umrah Package 15 Days",
+    "pricing": {
+      "double": "3500",
+      "triple": "3200",
+      "quad": "3000",
+      "currency": "USD"
+    },
+    "duration": {
+      "nights_makkah": "8",
+      "nights_madina": "5",
+      "total_nights": "13"
+    },
+    "hotels": {
+      "makkah": "Swissotel Makkah",
+      "madina": "Pullman Zamzam Madina"
+    },
+    "services": {
+      "transportation": "Private Bus",
+      "visa": "30 Days Visa"
+    },
+    "inclusions": {
+      "breakfast": true,
+      "dinner": true,
+      "visa": true,
+      "ticket": true,
+      "roundtrip": true,
+      "ziyarat": true,
+      "guide": true
+    }
+  }
+}
+↑ Includes package details for sales team ✅
+
+================================================================================
+                    FOR BOOKING PORTAL DEVELOPERS
+================================================================================
+
+SHARE THIS DOCUMENT:
+  → BOOKING_PORTAL_API_DOCUMENTATION.md
+
+WHAT THEY NEED TO DO:
+  1. Update webhook endpoint to handle optional package_details object
+  2. Verify signature (HMAC-SHA256)
+  3. Check idempotency
+  4. Process both inquiry types (with/without package details)
+
+WHAT THEY NEED TO PROVIDE:
+  1. Webhook URL
+  2. Webhook Secret
+
+WHERE TO CONFIGURE:
+  /var/www/marwah-travels/.env:
+    INQUIRY_WEBHOOK_URL=https://booking-portal.com/api/webhooks/inquiries
+    INQUIRY_WEBHOOK_SECRET=secret_key_here
+
+================================================================================
+                          FILES CHANGED
+================================================================================
+
+BACKEND:
+  ✓ app/Models/Inquiry.php
+  ✓ app/Http/Controllers/WebController.php
+  ✓ database/migrations/2025_11_04_000000_add_package_details_to_inquiries_table.php
+  ✓ add_package_details_to_inquiries.sql
+
+FRONTEND:
+  ✓ app/pages/package_detail/page.tsx
+  ✓ components/PackageInquiryForm.tsx
+
+DOCUMENTATION:
+  ✓ BOOKING_PORTAL_API_DOCUMENTATION.md (24KB - for booking portal)
+  ✓ PACKAGE_INQUIRY_DEPLOYMENT_GUIDE.md (8KB - for deployment)
+  ✓ PACKAGE_INQUIRY_FEATURE_SUMMARY.md (6KB - overview)
+  ✓ PACKAGE_INQUIRY_QUICK_START.txt (this file)
+
+================================================================================
+                          KEY POINTS
+================================================================================
+
+✅ BACKWARD COMPATIBLE:
+   - Existing API unchanged
+   - General inquiries work as before
+   - Package fields are optional
+   - Booking portal integration won't break
+
+✅ NO IMAGES OR DESCRIPTIONS SENT:
+   - Only package name
+   - Only pricing info
+   - Only hotel names
+   - Only service titles
+   - Only inclusion flags
+   - NO package images
+   - NO detailed descriptions
+   - NO package IDs
+
+✅ WHAT SALES TEAM GETS:
+   - Customer name, email, phone (as before)
+   - NEW: Which package they're interested in
+   - NEW: What pricing they saw
+   - NEW: Which hotels were in package
+   - NEW: What services were included
+   - Better lead qualification!
+
+================================================================================
+                          SUPPORT
+================================================================================
+
+LOGS TO CHECK:
+  Laravel:  sudo tail -f /var/www/marwah-travels/storage/logs/laravel.log
+  Frontend: pm2 logs marwah-frontend
+  Nginx:    sudo tail -f /var/log/nginx/error.log
+
+VERIFY MIGRATION:
+  mysql -u root -p marwah_travels -e "DESCRIBE inquiries;"
+
+CHECK WEBHOOK:
+  curl -X POST https://www.mtumrah.com/api/inquiries/1/forward-webhook \
+    -H "X-Api-Key: your-key"
+
+================================================================================
+
+                    ✅ FEATURE READY TO DEPLOY
+
+================================================================================
+
