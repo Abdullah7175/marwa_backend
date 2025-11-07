@@ -91,6 +91,30 @@ class PanelController extends Controller
             }
             return response()->json(['message'=>"updated succesfully"],200);
 
+        }else if($action==='update'){
+            $category = Category::find($id);
+            if(!$category){
+                return response()->json(['error' => 'Category not found'], 404);
+            }
+
+            $fields = collect($request->only(['name', 'status', 'description', 'slug']))
+                ->filter(function ($value) {
+                    return $value !== null && $value !== '';
+                })
+                ->toArray();
+
+            if(empty($fields)){
+                return response()->json(['error' => 'No fields provided for update'], 422);
+            }
+
+            $category->fill($fields);
+            $category->save();
+
+            return response()->json([
+                'message' => 'Category updated successfully',
+                'category' => $category->fresh()
+            ], 200);
+
         }else if($action=='delete'){
             $category = Category::find($id);
             if($category){
@@ -99,6 +123,8 @@ class PanelController extends Controller
             return response()->json(['message'=>"deleted succesfully"],200);
 
         }
+
+        return response()->json(['error' => 'Invalid action'], 400);
     }
 
     public function updateHotel(Request $request){
